@@ -1,0 +1,2 @@
+<http://example.org/hello> <http://example.org/to> "world" .
+<http://example.org/hello> <http://www.w3.org/2000/01/rdf-schema#label> "Hello" .

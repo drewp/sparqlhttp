@@ -1,0 +1,18 @@
+Metadata-Version: 1.0
+Name: sparqlhttp
+Version: 1.0
+Summary: HTTP SPARQL server and client for twisted and rdflib
+Home-page: http://projects.bigasterisk.com/sparqlhttp/
+Author: Drew Perttula
+Author-email: drewp@bigasterisk.com
+License: UNKNOWN
+Download-URL: http://projects.bigasterisk.com/sparqlhttp-1.0.tar.gz
+Description: UNKNOWN
+Platform: UNKNOWN
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: GNU Library or Lesser General Public License (LGPL)
+Classifier: Programming Language :: Python
+Classifier: Topic :: Database
+Classifier: Topic :: Internet :: WWW/HTTP
+Classifier: Topic :: Software Development :: Libraries :: Python Modules

@@ -1,0 +1,168 @@
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>HTTP SPARQL server for rdflib</title>
+<style type="text/css">
+#cake {
+  border-collapse: collapse;
+  border: 1px solid gray;
+}
+#cake td {
+  border: 1px solid black;
+} 
+#cake td span {
+  font-size: 90%;
+  font-style: italic;
+}
+pre {
+  border: 1px solid #aaa;
+  background: #edc;
+  padding: 1em;
+  overflow: auto;
+}
+pre.output {
+  background: #eee;
+
+}
+</style>
+</head>
+<body>
+
+<h1>HTTP SPARQL server for twisted and rdflib</h1>
+
+<p>
+This library is for programs that use twisted for networking, use
+rdflib for RDF, and want to do sparql over http. It contains a client
+and a server, but you should be able to mix and match with other
+sparql clients and servers.
+</p>
+
+<table id="cake">
+<tr><th>Classes</th></tr>
+<tr bgcolor="#f19e9e"><td>RemoteGraph <span>twisted web client that talks to SPARQLResource (or other sparql-over-http servers)</span></td></tr>
+<tr bgcolor="#cbcbcb"><td align="center">&#8657; HTTP &#8659; </td></tr>
+<tr bgcolor="#e4f19e"><td>SPARQLResource <span>twisted web resource that supports various GET/POST commands</span></td></tr>
+<tr bgcolor="#9ef1e4"><td>Graph2 <span>slightly different API for the rdflib graph class</span></td></tr>
+<tr bgcolor="#9ebbf1"><td>ConjunctiveGraph <span>(from rdflib)</span></td></tr>
+</table>
+
+<p>
+There is also a LocalGraph class, which presents exactly the same API
+as RemoteGraph, but it talks to an in-process rdflib graph. This is
+convenient for testing your async RemoteGraph code without bothering
+to setup the http connection.
+</p>
+<pre>
+
+# this code will work whether graph is a RemoteGraph or a LocalGraph
+
+    def method(self):
+        d = graph.remoteLabel(subj)
+        d.addCallback(self.withLabel)
+
+    def withLabel(self, label):
+        print label
+
+</pre>
+
+<h2>Requirements</h2>
+
+<ul>
+<li><a href="http://effbot.org/zone/element-index.htm">elementtree</a></li>
+<li><a href="http://rdflib.net/">rdflib 2.3.3 +</a></li>
+<li><a href="http://divmod.org/trac/wiki/DivmodNevow">nevow</a> (<a href="http://twistedmatrix.com/trac/">twisted</a>, zope.interface)</li>
+</ul>
+
+<h2>Demo</h2>
+
+<ol>
+
+<li>Start a server, creating a new berkeleydb instance in <code>./db/</code>
+
+<pre>./<a href="sparqlserve">sparqlserve</a> --home db</pre>
+
+<pre class="output">
+2007/01/22 00:58 -0700 [-] Log opened.
+2007/01/22 00:58 -0700 [-] twisted.web.server.Site starting on 9991
+2007/01/22 00:58 -0700 [-] Starting factory &lt;twisted.web.server.Site instance at 0xb7646aac&gt;
+</pre>
+
+</li>
+
+<li>In another shell, parse some NT and POST it to the server. The
+post will be to "/add?context=http://example.org#context" with data
+consisting of NT statements. That part of my protocol is not part of
+any standard.
+
+<pre>./<a href="graphimport">graphimport</a> hello.nt</pre>
+
+Server says:
+<pre class="output">
+2007/01/22 01:14 -0700 [HTTPChannel,0,127.0.0.1] 127.0.0.1 - - [22/Jan/2007:08:14:08 +0000] "POST /add?context=http%3A//example.org/%23context HTTP/1.0" 200 2 "-" "Twisted PageGetter"</pre>
+
+
+</li>
+
+<li>GET the query "SELECT ?s ?p ?o WHERE { ?s ?p ?o }" from the
+server. This uses the standard SPARQL query and results formats.
+
+<pre>./<a href="dumpgraph">dumpgraph</a></pre>
+
+Server says:
+<pre class="output">
+2007/01/22 01:15 -0700 [HTTPChannel,1,127.0.0.1] 127.0.0.1 - - [22/Jan/2007:08:15:32 +0000] "GET /?query=SELECT%20%3Fs%20%3Fp%20%3Fo%20WHERE%20%7B%20%3Fs%20%3Fp%20%3Fo%20%7D HTTP/1.0" 200 617 "-" "Twisted PageGetter"</pre>
+
+Client says:
+<pre class="output">
+[(u'http://example.org/hello',
+  u'http://example.org/to',
+  rdflib.Literal('world',language=None,datatype=None)),
+ (u'http://example.org/hello',
+  u'http://www.w3.org/2000/01/rdf-schema#label',
+  rdflib.Literal('Hello',language=None,datatype=None))]
+</pre>
+</li>
+
+<li>Do an arbitrary query on the server.
+<pre>./<a href="query">query</a> "SELECT ?label WHERE { ?s &lt;http://www.w3.org/2000/01/rdf-schema#label&gt; ?label }"</pre>
+<pre class="output">
+[{'label': rdflib.Literal('Hello',language=None,datatype=None)}]
+</pre>
+</li>
+
+<li>Check out the server diagnostics at http://localhost:9991/
+
+<p>I deliberately made an error request to cause the the traceback
+below. The table at the bottom is really nice for large programs,
+since it shows what lines in your code made the various queries.</p>
+
+<div style="border: 3px solid black">
+<h1>sparqlhttp server status</h1><ul><li>2<span> queries</span></li><li><span>Last error:</span><div><span>query: </span><pre style="background: white">SELECT ?broken { ?typo here }</pre></div><div><span>error: </span><pre style="background: white">Traceback (most recent call last):
+  File "sparqlhttp-1.0/sparqlhttp/serve.py", line 48, in getQuery
+    results = self.graph.queryd(query)
+  File "sparqlhttp-1.0/sparqlhttp/dictquery.py", line 80, in queryd
+    initNs=self.initNs)
+  File "/usr/lib/python2.4/site-packages/rdflib-2.3.3-py2.4-linux-i686.egg/rdflib/Graph.py", line 644, in query
+    return plugin.get('SPARQLQueryResult',QueryResult)(p.query(strOrQuery, initBindings, initNs, DEBUG))
+  File "/usr/lib/python2.4/site-packages/rdflib-2.3.3-py2.4-linux-i686.egg/rdflib/sparql/bison/Processor.py", line 26, in query
+    strOrQuery = Parse(strOrQuery, DEBUG)
+  File "/usr/lib/python2.4/site-packages/rdflib-2.3.3-py2.4-linux-i686.egg/rdflib/sparql/bison/Processor.py", line 16, in Parse
+    return p.parse(unicode(query,'utf-8'))
+SyntaxError: lexical error at line 1, column 30: no action found for 'here }'
+</pre></div></li><li><span>Last query:</span><pre style="background: white">SELECT ?broken { ?typo here }</pre><span>Again, as one line:</span><div>SELECT ?broken { ?typo here }</div></li><li><span>All query types, by total time spent</span><table style="border: 1px solid black;border-collapse: collapse;"><tr><th>total secs (per)</th><th>count</th><th>query (with sample initBindings)</th><th>bound</th><th>avg rows</th><th>sources</th></tr><tr><td>0.01 (0.0110)</td><td>1</td><td><pre style="background: white">SELECT ?s ?p ?o WHERE { ?s ?p ?o }</pre></td><td>()</td><td>2.0</td><td><div>dumpgraph:9</div></td></tr></table></li></ul></div>
+
+</li>
+
+<li>Try running the tests. They use twisted trial and they run from
+the test directory:
+
+<pre>
+cd test
+trial test_dictquery.py test_remotegraph.py    # all these should work
+trial test_syncimport.py   # this one might not do as well
+</pre>
+
+</li>
+
+</ol>
+</body>
+</html>

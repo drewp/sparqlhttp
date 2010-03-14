@@ -1,0 +1,14 @@
+#!/usr/bin/python
+
+import pprint
+from sparqlhttp.remotegraph import RemoteGraph
+from sparqlhttp.oneshot import run
+
+graph = RemoteGraph(serverUrl="http://localhost:9991/")
+
+d = graph.remoteQueryd("SELECT ?s ?p ?o WHERE { ?s ?p ?o }")
+def printResult(rows):
+    pprint.pprint([(r['s'], r['p'], r['o']) for r in rows])
+
+run(d, printResult)
+

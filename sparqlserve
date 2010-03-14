@@ -1,0 +1,30 @@
+#!/usr/bin/python
+
+import sys, atexit, optparse
+from twisted.internet import reactor
+import twisted.web
+from twisted.python import log
+
+from sparqlhttp.dictquery import Graph2 # this alters the rdflib path
+from sparqlhttp.serve import SPARQLResource
+from rdflib.Graph import ConjunctiveGraph
+
+parser = optparse.OptionParser()
+parser.add_option('-p', '--port', help='port to listen on',
+                  type='int', default=9991)
+parser.add_option('--home', help='berkeley db home', default='.')
+opts, args = parser.parse_args()
+
+log.startLogging(sys.stdout)
+
+g = ConjunctiveGraph('Sleepycat')
+g.open(opts.home, create=True)
+
+def close():
+    print "closing db.."
+    g.close()
+atexit.register(close)
+graph = Graph2(g)
+
+reactor.listenTCP(opts.port, twisted.web.server.Site(SPARQLResource(graph)))
+reactor.run()

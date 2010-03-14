@@ -1,0 +1,21 @@
+#!/usr/bin/python
+
+import sys
+from sparqlhttp.remotegraph import RemoteGraph
+from sparqlhttp.oneshot import run
+
+from rdflib.Graph import Graph
+from rdflib import URIRef
+
+graph = RemoteGraph(serverUrl="http://localhost:9991/")
+
+ntFilename = sys.argv[1]
+
+localGraph = Graph()
+localGraph.parse(ntFilename, format='nt')
+stmts = list(localGraph.triples((None,None,None)))
+
+d = graph.remoteAdd(*stmts,
+          **dict(context=URIRef("http://example.org/#context")))
+run(d)
+
