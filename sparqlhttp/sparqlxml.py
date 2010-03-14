@@ -1,7 +1,10 @@
-from nevow import flat, tags as T, stan
+from nevow import flat, tags as T, stan, json
 from nevow.stan import Tag
 from rdflib import URIRef, Literal, BNode
-from elementtree import ElementTree
+try:
+    from xml.etree import cElementTree as ElementTree
+except ImportError:
+    from elementtree import ElementTree
 """
 see http://www.w3.org/TR/rdf-sparql-XMLres/
 
@@ -34,6 +37,8 @@ def parseTerm(element):
     elementtree element"""
     tag, text = element.tag, element.text
     if tag == RESULTS_NS_ET + 'literal':
+        if text is None:
+            text = ''
         ret = Literal(text)
         if element.get('datatype', None):
             ret.datatype = URIRef(element.get('datatype'))
@@ -57,12 +62,18 @@ def xmlResults(resultRows):
     will return bindings for ?x only, just as if you never included
     ?unused. The sparql engine should probably error on that case, in
     which case this handler will stop getting used.
-     
+
+    But note that if there was an OPTIONAL { ?unused ... } in the
+    query, then there's no error but some rows won't get a
+    <binding>. See _addOptionalVars in remotegraph.py.
 
     This is the inverse of parseSparqlResults.
     """
     # this is redundant with a version in rdflib already, although
     # mine uses a default xml namespace that saves quite a few bytes
+
+    # in one test, getQuery spends 27% in queryd and 71% in this function!
+    
     return '<?xml version="1.0"?>\n' + flat.flatten(
         Tag("sparql")(xmlns=RESULTS_NS)[
           Tag("head")[
@@ -105,11 +116,15 @@ def parseSparqlResults(xmlResults):
 
     This is the inverse of xmlResults."""
     if isinstance(xmlResults, basestring):
+        if isinstance(xmlResults, unicode):
+            xmlResults = xmlResults.encode('utf-8')
         try:
             tree = ElementTree.fromstring(xmlResults)
         except Exception, e:
-            raise e.__class__("error parsing %r: %s" % (xmlResults, e))
-            raise
+            try:
+                raise e.__class__("error parsing %r: %s" % (xmlResults, e))
+            except:
+                raise e
     else:
         tree = xmlResults
 

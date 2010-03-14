@@ -79,9 +79,12 @@ class SPARQLResource(Resource):
         if isCount:
             return xmlCountResults(count)
 
-        # this one is failing, not sure why
-        #ret = self.graph.queryd(query, format='xml')
-        ret = xmlResults(results)
+        if request.getHeader('accept') == 'application/sparql-results+json':
+            raise NotImplementedError
+        else:
+            # this one is failing, not sure why
+            #ret = self.graph.queryd(query, format='xml')
+            ret = xmlResults(results)
         return ret
 
     def getSave(self, request):

@@ -10,12 +10,9 @@ cleanup and something tries to show a warning.
 import sys, os, traceback, logging
 from twisted.trial import unittest
 from twisted.internet import reactor, defer
-import twisted.web
-from rdflib import Namespace, Literal, RDFS, URIRef
-from rdflib.Graph import Graph
+from rdflib import Literal, URIRef
 sys.path.append("..")
 from sparqlhttp.syncimport import SyncImport
-from sparqlhttp.serve import SPARQLResource
 from sparqlhttp.dictquery import Graph2
 
 import shared
@@ -46,7 +43,9 @@ class SyncTestCase(unittest.TestCase):
         self.stmt1 = (EXP['dp'], EXP['name'], Literal("Drew"))
 
         self.done = defer.Deferred()
-        self.done.addCallback(lambda result: self.sync.__del__())
+
+    def tearDown(self):
+        self.sync.stop()
 
     def checkAndComplete(self, checkFunc):
         """decorator to add some completion code after checkFunc"""
@@ -68,6 +67,7 @@ class SyncTestCase(unittest.TestCase):
                 func(*args, **kw)
             except KeyboardInterrupt: raise
             except Exception, e:
+                traceback.print_exc()
                 self.done.errback(e)
                 raise e
         return func2

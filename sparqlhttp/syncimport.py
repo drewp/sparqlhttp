@@ -21,13 +21,17 @@ web interface to examine the dbInternal context
 an error in the poll makes it stop running for the rest of the process
 """
 from __future__ import division
-import os, time, logging, traceback
+import sys, os, time, logging, traceback
 from rdflib import Namespace, Literal
-from rdflib.Graph import Graph
 from rdflib.syntax.parsers.ntriples import ParseError
 from twisted.internet import task
 from sparqlhttp.dictquery import contextFromFilename
-from xml.utils import iso8601
+
+# from /usr/share/doc/python-xml/changelog.Debian.gz, to make
+# xml.utils.iso8601 available on ubuntu 8.04+
+sys.path.append('/usr/lib/python%s/site-packages/oldxml' % sys.version[:3])
+
+from _xmlplus.utils import iso8601
 import xml.sax._exceptions
 IMP = Namespace("http://projects.bigasterisk.com/2006/01/syncImport/")
 XS = Namespace("http://www.w3.org/2001/XMLSchema#")
@@ -38,47 +42,63 @@ class SyncImport(object):
     """this object stores a little bit of its own data in each file's context"""
     def __init__(self, graph, inputDirectory=".",
                  contextPrefix="http://example.org",
-                 pollSeconds=2):
+                 pollSeconds=2, polling=True):
         """graph is a Graph2 (takes multiple stmts for add())"""
         self.__dict__.update(vars())
 
         self.lastError = {} # filename : error
-        
-        self.pollLoop = task.LoopingCall(self.poll)
-        self.pollLoop.start(pollSeconds)
 
-    def __del__(self):
-        self.pollLoop.stop()
+        if polling:
+            self.pollLoop = task.LoopingCall(self._poll)
+            self.pollLoop.start(pollSeconds)
 
-    def poll(self):
+    def stop(self):
+        """stop any polling that might still be running. This is
+        mainly for unittests"""
+        if self.pollLoop:
+            self.pollLoop.stop()
+            self.pollLoop = None
+
+    __del__ = stop
+
+    def _poll(self):
         missingFilenames = self.allImportedFilenames()
 
         for filename in self.allInputFiles():
-            if os.path.exists(filename):
+            # TODO: up here, run contextFromFilename since it would cull out
+            # files of the wrong extension.
+            
+            if os.path.exists(filename): # TODO: this is always true, right? just an extra stat
                 missingFilenames.discard(filename)
             if self.fileIsUpdated(filename):
                 log.info("need reload of %s", filename)
                 self.reloadContext(filename)
 
         for filename in missingFilenames:
-            # there's a bug where this was making ValueError since the
-            # filename wasn't underneath the input directory. The bug
-            # is that the polling stops on the first error, requiring
-            # a db restart.
-            try:
-                ctx = contextFromFilename(filename, self.contextPrefix,
-                                          self.inputDirectory)
-            except ValueError:
-                # if we can't figure out the context, it might be
-                # because this filename is handled by a different
-                # SyncImport with another inputDirectory, which is
-                # cool
-                continue
-            log.info("input file %s disappeared, clearing %s" % (filename, ctx))
-            self.graph.remove((None, None, None), context=ctx)
-            self.removeImportRecord(ctx)
-
-    def logFileError(self, filename, logFunc, msg):
+            self.fileDisappeared(filename)
+            
+    def fileDisappeared(self, filename):
+        """
+        this file is no longer on disk; drop its graph and bookkeeping triples
+        """
+        # there's a bug where this was making ValueError since the
+        # filename wasn't underneath the input directory. The bug
+        # is that the polling stops on the first error, requiring
+        # a db restart.
+        try:
+            ctx = contextFromFilename(filename, self.contextPrefix,
+                                      self.inputDirectory)
+        except ValueError:
+            # if we can't figure out the context, it might be
+            # because this filename is handled by a different
+            # SyncImport with another inputDirectory, which is
+            # cool
+            return
+        log.info("input file %s disappeared, clearing %s" % (filename, ctx))
+        self.graph.remove((None, None, None), context=ctx)
+        self.removeImportRecord(ctx)
+        
+    def _logFileError(self, filename, logFunc, msg):
         if msg == self.lastError.get(filename, None):
             return
         self.lastError[filename] = msg
@@ -100,7 +120,7 @@ class SyncImport(object):
                 ctx = contextFromFilename(filename, self.contextPrefix,
                                           self.inputDirectory)
             except ValueError, e:
-                self.logFileError(filename, log.debug,
+                self._logFileError(filename, log.debug,
                       "filename %s doesn't tell us a context- "
                       "skipping (%s)" % (filename, e))
 
@@ -112,7 +132,7 @@ class SyncImport(object):
                 return True
         except KeyboardInterrupt: raise
         except Exception, e:
-            self.logFileError(filename, log.warn,
+            self._logFileError(filename, log.warn,
                       "error scanning file %s: %s" % (filename, e))
         return False
                     
@@ -139,7 +159,20 @@ class SyncImport(object):
     def lastImportTimeSecs(self, context):
         """get the import time for a context, in unix seconds; or None
         if it was never imported"""
-        importTime = self.graph.value(context, IMP['lastImportTime'])
+        if 0:
+            # natural version
+            importTime = self.graph.value(context, IMP['lastImportTime'])
+        else:
+            # alternate version for speed
+            #
+            # self.graph.value might use some optimizations and LRUCache
+            # if you have one, but the overhead of dealing with this query
+            # was taking like 2ms. If we just use raw rdflib, the query
+            # goes 10x faster. Ideally this would be solved by optimizing
+            # the Graph2 and caching layers instead.
+            innerGraph = self.graph.graph
+            importTime = innerGraph.value(context, IMP['lastImportTime'])
+        
         if importTime is None:
             log.debug("no imp:lastImportTime for %s" % context)
             return None

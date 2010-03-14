@@ -2,17 +2,32 @@ from __future__ import division
 import os, re, logging, time
 import sys
 import xml.sax
-sys.path.insert(0, os.path.join(os.path.dirname(__file__),"../rdflib-2.3.3/build/lib.linux-i686-2.4"))
 
 import rdflib
-from rdflib import Variable, RDFS, URIRef, BNode, Literal, StringInputSource
+from rdflib import Variable as rdflib_Variable, RDFS, URIRef, BNode, Literal, StringInputSource
 from rdflib.syntax.parsers.ntriples import ParseError
 from rdflib.Graph import ConjunctiveGraph, Graph
 
+if rdflib.__version__ == '2.4.0': # number might not be exactly right
+    Variable = lambda v: rdflib_Variable('?' + v)
+else:
+    Variable = rdflib_Variable
+
 assert map(int, rdflib.__version__.split('.')) >= [2,3,3], "requires rdflib 2.3.3 or newer"
+
+try:
+    from rdflib.sparql import Algebra
+    # enable a plain SELECT query (with no graphs specified) to search all
+    # data. Your add() calls will seem to have no effect unless you do
+    # this. I'm not sure when it would be right to turn it off.
+    Algebra.DAWG_DATASET_COMPLIANCE = False
+except ImportError:
+    pass # older rdflib, no rdflib.sparql.Algebra
 
 log = logging.getLogger("Graph2")
 
+# a better name for this might be SparqlMethodsGraph, since it uses
+# sparql for all methods
 class Graph2(object):
     """enhancements to the rdflib builtin graph. Only a few methods
     are implemented in this version
@@ -78,6 +93,7 @@ class Graph2(object):
             # or, use my sparqlxml.xmlResults() serializer
             return rows.serialize(format=format)
         rows = list(rows)
+        log.debug("got %s rows" % len(rows))
         def returnIterator():
             # this implementation is dumb, but I didn't bother with a
             # better one because the real sparql query method already has
@@ -104,7 +120,9 @@ class Graph2(object):
     def add(self, *triples, **context):
         """takes multiple triples at once (to reduce RPC calls).
         context arg is required"""
-        self._graphModified()
+        self._graphModified() # why is this at the top, before the
+                              # modification, instead of after the
+                              # commit? need to check the usage
         try:
             context = context['context']
         except KeyError:
@@ -136,10 +154,12 @@ class Graph2(object):
 
     def contains(self, stmt):
         # this should be an ASK, but ask seems to be messed up in rdflib
-        any = self.countQuery("SELECT * WHERE { ?s ?p ?o. }",
-                            initBindings={Variable('?s') : stmt[0],
-                                          Variable('?p') : stmt[1],
-                                          Variable('?o') : stmt[2]})
+        binds = {}
+        for var, node in zip(['s', 'p', 'o'], stmt):
+            if node is not None:
+                binds[Variable(var)] = node
+        any = self.countQuery("SELECT * WHERE { ?s ?p ?o }",
+                            initBindings=binds)
         return any > 0
 
     def label(self, subj, default=''):
@@ -147,8 +167,8 @@ class Graph2(object):
 
     def value(self, subj, pred, default=None):
         rows = iter(self.queryd("SELECT ?value WHERE { ?s ?p ?value }",
-                                initBindings={Variable('?s') : subj,
-                                              Variable('?p') : pred}))
+                                initBindings={Variable('s') : subj,
+                                              Variable('p') : pred}))
         try:
             row = rows.next()
             return row['value']
@@ -248,10 +268,10 @@ def fixDatatypedLiterals(query, initBindings):
 
     def repl(match):
         value, datatype = match.groups()
-        var = '?fix%s' % count[0]
+        var = 'fix%s' % count[0]
         count[0] = count[0] + 1
         initBindings[var] = Literal(value, datatype=URIRef(datatype))
-        return var
+        return '?'+var
         
     query = re.sub(r'"(.*?)"\^\^<([^>]+)>', repl, query)
     
@@ -281,6 +301,7 @@ def fixDatatypedLiterals(query, initBindings):
 ##     return query, initBindings
 
 def sparqlSelection(query):
+    assert ' WHERE ' in query, "sorry, I require the WHERE token because of some dumb parsing"
     return [w for w in query.split("WHERE", 1)[0].split("SELECT",1)[1].split()
             if w.startswith("?")]
 
@@ -319,11 +340,17 @@ def filenameFromContext(context, prefix, rootDir):
     return os.path.join(rootDir, innerPath + ".nt")
 
 def contextFromFilename(filename, prefix, rootDir, allowedExtensions=['.nt', '.n3']):
+    """
+    prefix will get a trailing / if it doesn't already have
+    one. Trailing / is ignored on rootDir.
+    """
+    prefix = prefix.rstrip('/') + '/'
     if not filename.startswith(rootDir):
         raise ValueError("filename %r is not in %r" % (filename, rootDir))
     base, ext = os.path.splitext(filename)
     if ext not in allowedExtensions:
         raise ValueError("filename %r has an unknown extension" % filename)
-    return URIRef("%s%s#context" % (prefix, base[len(rootDir):]))
+    relPath = base[len(rootDir.rstrip('/')):]
+    return URIRef("%s%s#context" % (prefix, relPath.lstrip('/')))
 
 

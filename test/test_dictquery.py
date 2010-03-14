@@ -1,10 +1,9 @@
 import sys, os, logging
 
-from rdflib import Namespace, Literal, Variable, RDFS, StringInputSource, URIRef
-from rdflib.Graph import ConjunctiveGraph
+from rdflib import Literal, Variable, RDFS, StringInputSource
 from rdflib.syntax.parsers.ntriples import ParseError
+import rdflib
 from twisted.trial import unittest
-import sys
 sys.path.append("..")
 from sparqlhttp.dictquery import Graph2
 
@@ -12,6 +11,7 @@ from shared import EXP, QUERY, XS
 import shared
 
 log = logging.basicConfig(level=logging.DEBUG)
+print "rdflib", rdflib
 
 class TestCase(unittest.TestCase):
     def setUp(self):
@@ -121,17 +121,34 @@ class TestCase(unittest.TestCase):
         date = Literal("2007-01-27", datatype=XS['date'])
         self.graph.add((EXP['labeled'], EXP['date'], date),
                        context=EXP['ctx#context'])
+
+        from rdflib.sparql.bison import Parse
+        q = Parse('SELECT ?x ?y WHERE { ?x exp:date ?y }')
+        print q
+        rows = list(self.graph.queryd('SELECT ?x ?y WHERE { ?x exp:date ?y }'))
+        print rows
+
+        # sparql query looks in self.graph.graph.default_context.triples
+        print list(self.graph.graph.triples((None, EXP['date'], None)))
+
+        
+        return
+        #######################################################################
+        rows1 = list(self.graph.queryd('SELECT ?x WHERE { ?x exp:date "2007-01-27"^^<http://www.w3.org/2001/XMLSchema#date> }'))
+        print "rows1", rows1
+
+        rows2 = list(self.graph.queryd('SELECT ?x WHERE { ?x exp:date "2001-01-11"^^<http://www.w3.org/2001/XMLSchema#date> }'))
+        print "rows2", rows2
+
+        rows3 = list(self.graph.queryd('SELECT ?x WHERE { ?x exp:date ?d }',
+                                       initBindings={Variable("?d") :
+                                                     rows[0]['y']}))#Literal("2007-01-27", datatype=URIRef("http://www.w3.org/2001/XMLSchema#date"))}))
+        print "rows3", rows3
+
         oneResult = [{'x' : EXP['labeled']}]
-
-        rows = self.graph.queryd('SELECT ?x WHERE { ?x exp:date "2007-01-27"^^<http://www.w3.org/2001/XMLSchema#date> }')
-        self.assertEqual(list(rows), oneResult)
-
-        rows = self.graph.queryd('SELECT ?x WHERE { ?x exp:date "2001-01-11"^^<http://www.w3.org/2001/XMLSchema#date> }')
-        self.assertEqual(list(rows), [])
-
-        rows = self.graph.queryd('SELECT ?x WHERE { ?x exp:date ?d }',
-                                 initBindings={Variable("?d") : Literal("2007-01-27", datatype=URIRef("http://www.w3.org/2001/XMLSchema#date"))})
-        self.assertEqual(list(rows), oneResult)
+        self.assertEqual(rows1, oneResult)
+        self.assertEqual(rows2, [])
+        self.assertEqual(rows3, oneResult)
        
 
     def testUnion(self):

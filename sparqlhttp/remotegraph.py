@@ -1,12 +1,17 @@
-import urllib, warnings, inspect, os, md5, re
+import urllib, warnings, inspect, os, md5, re, logging
 from twisted.internet import defer
 from twisted.web.client import getPage
 from rdflib import Variable, RDFS, Literal
 from rdflib.exceptions import UniquenessError
 from rdflib.Graph import Graph
 from sparqlhttp.sparqlxml import parseSparqlResults, parseCountTree
+from sparqlhttp.sparqljson import parseJsonResults, jsonRowCount
 from sparqlhttp.dictquery import sparqlSelection
-from elementtree import ElementTree
+try:
+    from xml.etree import ElementTree
+except ImportError:
+    from elementtree import ElementTree
+log = logging.getLogger()
 
 # every http request to the server would print "Stopping factory" and
 # then the entire, urlquoted sparql request. That's a mess of
@@ -23,8 +28,12 @@ class _RemoteGraph(object):
     All queries pass through remoteQueryd or remoteCountQueryd, so
     those are the ones to override when you're adding a cache, for
     example.
+
+    serverUrl is everthing up to the ?query=... part
+    
     """
-    def __init__(self, serverUrl, initNs=None, sendSourceLine=False):
+    def __init__(self, serverUrl, initNs=None, sendSourceLine=False,
+                 resultFormat='json'):
         """
         turn on sendSourceLine and the client will put an
         x-source-line header in every request. The server report shows
@@ -32,11 +41,15 @@ class _RemoteGraph(object):
         tell you exactly where your slow queries are in the
         source. The tradeoff is that getting the source line (per
         request) can be slow. Maybe milliseconds per req, I forget.
+
+        resultFormat can be 'xml' or 'json'. We'll ask the server for
+        that format and then parse it here.
+        
         """
-        if not serverUrl.endswith('/'):
-            warnings.warn("serverUrl should end with '/', like 'http://localhost:8000/'")
         self.sendSourceLine = sendSourceLine
         self.serverUrl = serverUrl
+        assert resultFormat in ['xml', 'json']
+        self.resultFormat = resultFormat
         self.prologue = ""
         if initNs:
             self.prologue = "".join("PREFIX %s: <%s>\n" % (pre,full)
@@ -66,7 +79,11 @@ class _RemoteGraph(object):
         raise ValueError
 
     def _serverGet(self, request, headers=None):
-        """deferred to the result of GET /{request}"""
+        """deferred to the result of GET {serverUrl}{request}"""
+        return getPage(self.serverUrl + request,
+                       headers=self._withSourceLineHeaders(headers))
+
+    def _withSourceLineHeaders(self, headers):
         _headers = {}
         if self.sendSourceLine:
             try:
@@ -77,8 +94,7 @@ class _RemoteGraph(object):
                 pass
         if headers is not None:
             _headers.update(headers)
-        return getPage(self.serverUrl + request,
-                       headers=_headers)
+        return _headers
 
     def _checkQuerySyntax(self, query):
         if query == 'SELECT * WHERE { ?s ?p ?o. }':
@@ -90,9 +106,14 @@ class _RemoteGraph(object):
         """send this query to the server, return deferred to the raw
         server result. This is where the prologue (@PREFIX lines) is added."""
         self._checkQuerySyntax(query)
-        get = ('?query=' +
-               urllib.quote(self.prologue +
-                            interpolateSparql(query, initBindings), safe=''))
+        try:
+            get = ('?query=' +
+                   urllib.quote(self.prologue +
+                                interpolateSparql(query, initBindings), safe=''))
+        except Exception:
+            log.error("original query=%r, initBindings=%r" %
+                      (query, initBindings))
+            raise
 
         # for the stats system to group together all the queries that
         # vary only in their initBindings, I send a (reasonably)
@@ -102,9 +123,12 @@ class _RemoteGraph(object):
         xBindings = (" ".join(initBindings.keys())).encode('utf8')
 
         sendHeaders = {'x-uninterpolated-query-checksum' :
-                                          md5.new(query).hexdigest(),
-                                          'x-bindings' : xBindings,
-                                          }
+                       md5.new(query).hexdigest(),
+                       'x-bindings' : xBindings,
+                       }
+        if self.resultFormat == 'json':
+            sendHeaders['Accept'] = 'application/sparql-results+json'
+            
         if headers:
             sendHeaders.update(headers)
         
@@ -113,8 +137,31 @@ class _RemoteGraph(object):
         
     def remoteQueryd(self, query, initBindings={}):
         d = self._getQuery(query, initBindings)
-        d.addCallback(parseSparqlResults)
+        if self.resultFormat == 'json':
+            d.addCallback(parseJsonResults)
+        else:
+            d.addCallback(parseSparqlResults)
+        d.addCallback(self._addOptionalVars, query)
         return d
+
+    def _addOptionalVars(self, rows, query):
+        """augment the rows with 'x':None values for any query
+        variable x that happened not to be bound in that row. This is
+        for consistency with rdflib's sparql results, which always
+        include all the vars in their result tuple.
+
+        The parseJsonResults (and parseSparqlResults) version totally
+        has the information to do this itself, but it seemed easier to
+        write it here. This second pass might be a little bit slower.
+
+        rows are edited in-place, and then returned.
+        """
+        vars = [v.strip('?') for v in sparqlSelection(query)]
+        for row in rows:
+            for v in vars:
+                if v not in row:
+                    row[v] = None
+        return rows
 
     def remoteCountQuery(self, query, initBindings={}):
         # hint the server that it can return just a count (but if it
@@ -124,6 +171,11 @@ class _RemoteGraph(object):
         
         @d.addCallback
         def checkType(result):
+            if self.resultFormat == 'json':
+                # virtuoso can do an aggregate query and give just the
+                # count, but I haven't implemented that yet.
+                return jsonRowCount(result)
+            
             tree = ElementTree.fromstring(result)
             # if it's pre-counted, return that
             try:
@@ -145,6 +197,8 @@ class _RemoteGraph(object):
         return d
 
     def remoteContains(self, stmt):
+        import warnings
+        warnings.warn("remoteContains was returning true for a false <user> a ffg:admin statement")
         bindings = {}
         for termName, value in zip(['s', 'p', 'o'], stmt):
             if value is not None:
@@ -184,9 +238,10 @@ class _RemoteGraph(object):
     def _postWithTriples(self, url, triples):
         g = graphFromTriples(triples)
         postData = g.serialize(format='nt')
-        d = getPage(url, method='POST', postdata=postData)
-        return d
+        return self._deferredPost(url, postData)
 
+    def _deferredPost(self, url, postData):
+        return getPage(url, method='POST', postdata=postData)
                   
 
 def graphFromTriples(triples):
@@ -196,26 +251,41 @@ def graphFromTriples(triples):
     return g
             
 
+def makeDeferredFunc(func):
+    """wrapper for func that makes it return a deferred"""
+    def df(*args, **kw):
+        return defer.succeed(func(*args, **kw))
+    return df
+
 class LocalGraph(object):
     """this is a local (in-process) graph, but with an API that's
     compatible with RemoteGraph (i.e. the remote* methods still return
-    deferreds)"""
+    deferreds)
+
+    BUG: i think remoteQueryd on this object returns a generator,
+    whereas the actual RemoteGraph would return a list. Workaround is
+    to list() the result you get.
+    """
     def __init__(self, graph, initNs=None):
         assert initNs is None
         self.graph = graph
+        self.setupLocalMethods()
 
-    def __getattr__(self, attr):
+    graphAccessFilenames = []
+
+    def setupLocalMethods(self):
         """for methods like remoteLabel, call self.graph.label and
-        wrap the result in a deferred"""
-        if not attr.startswith("remote"):
-            return self.__getattribute__(attr)
-        
-        def callLocalGraphMethod(*args, **kw):
-            localVersion = (attr[len('remote')].lower() +
-                            attr[len("remote") + 1:])
-            result = getattr(self.graph, localVersion)(*args, **kw)
-            return defer.succeed(result)
-        return callLocalGraphMethod
+        wrap the result in a deferred.
+        """
+        # At first, I tried doing this in a __getattr__ method, but
+        # RemoteGraphCache had problems subclassing it.
+        for methodName in dir(_RemoteGraph):
+            if not methodName.startswith('remote'):
+                continue
+            localVersion = (methodName[len('remote')].lower() +
+                            methodName[len("remote") + 1:])
+            localFunc = getattr(self.graph, localVersion)
+            setattr(self, methodName, makeDeferredFunc(localFunc))
 
         
 def RemoteGraph(graph=None, serverUrl=None, **kw):
@@ -248,10 +318,13 @@ def interpolateSparql(query, initBindings):
     selection = sparqlSelection(query)
 #    print "Sel is", selection
     for var, value in initBindings.items():
+        # i can't seem to handle various versions of rdflib and
+        # Variables that have or don't have leading ?
+        var = var.lstrip('?')
         if '?' + var not in selection:
             # hopefully you don't have spaces in your urls, and you do
             # have spaces on both sides of all variable names
-            text = text.replace(' %s ' % var, ' %s ' % value.n3())
+            text = text.replace(' ?%s ' % var, ' %s ' % value.n3())
     query = prolog + text
 #    print "Expand to", query
     return query 

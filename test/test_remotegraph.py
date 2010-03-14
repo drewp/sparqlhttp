@@ -13,6 +13,7 @@ from rdflib import Namespace, Literal, RDFS, BNode, Variable, URIRef
 from rdflib.Graph import Graph
 from rdflib.exceptions import UniquenessError
 import rdflib
+print rdflib
 
 sys.path.append("..")
 from sparqlhttp.remotegraph import RemoteGraph
@@ -97,6 +98,9 @@ class Cases(object):
         return d
 
     def testQueryDatatype(self):
+        """my own patched rdflib gets this right; stock 2.4.0 gets it
+        wrong. I think the issue is Literal.py and the comparison
+        functions"""
         date = Literal("2007-02-05",
                     datatype=URIRef("http://www.w3.org/2001/XMLSchema#date"))
         d = self.graph.remoteAdd((EXP['c'], EXP['d'], date),
@@ -106,7 +110,15 @@ class Cases(object):
             return self.graph.remoteQueryd('SELECT ?c WHERE { ?c exp:d "2007-02-05"^^<http://www.w3.org/2001/XMLSchema#date> }')
         @d.addCallback
         def check(rows):
-            self.assertEqual(list(rows), [{'c': EXP['c']}])
+            self.assertEqual(list(rows), [{'c': EXP['c']}]) # known issue in rdflib 2.4.0
+        return d
+
+    def testPreserveOptionalKeysInResult(self):
+        d = self.graph.remoteQueryd('SELECT ?first ?last WHERE { ?x exp:firstName ?first . OPTIONAL { ?x exp:lastName ?last . } }')
+        @d.addCallback
+        def check(rows):
+            self.assertEqual(list(rows), [{'first' : Literal('Drew'),
+                                           'last' : None}])
         return d
         
     def testCountQuery(self):
@@ -270,7 +282,7 @@ class Cases(object):
         def rm(result):
             d = self.graph.remoteRemove(s0)
             d.addCallback(lambda result:
-                          self.graph.remoteQueryd("SELECT ?p { exp:x ?p ?o }"))
+                          self.graph.remoteQueryd("SELECT ?p WHERE { exp:x ?p ?o }"))
             return d
         @d.addCallback
         def check2(result):
@@ -306,7 +318,8 @@ class RemoteTestCase(unittest.TestCase, Cases):
         localGraph = Graph2(shared.localGraph(), initNs={'exp' : EXP, '' : EXP})
         self.listen = reactor.listenTCP(9991,
                      twisted.web.server.Site(SPARQLResource(localGraph)))
-        self.graph = RemoteGraph(serverUrl="http://localhost:9991/")
+        self.graph = RemoteGraph(serverUrl="http://localhost:9991/",
+                                 resultFormat='xml')
 
     def tearDown(self):
         self.listen.stopListening()
