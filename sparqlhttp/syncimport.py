@@ -8,12 +8,15 @@ watch a tree of files, arranged the same way Graph2 would save them:
 When a file changes, reload it, replacing the previous contents of the
 context.
 
+When a file disappears, remove the context.
+
 The file extensions can be n3/nt/rdf. If there are multiple extensions
 on the same name, behavior is undefined.
 
 todo:
 when scanning a file that was broken, don't relog the exact same error
 
+web interface to examine the dbInternal context
 """
 from __future__ import division
 import os, time, logging, traceback
@@ -46,8 +49,25 @@ class SyncImport(object):
         self.pollLoop.stop()
 
     def poll(self):
-        for filename in self.updatedFiles():
-            self.reloadContext(filename)
+        missingFilenames = self.allImportedFilenames()
+
+        for filename in self.allInputFiles():
+            if os.path.exists(filename):
+                missingFilenames.discard(filename)
+            if self.fileIsUpdated(filename):
+                log.info("need reload of %s", filename)
+                self.reloadContext(filename)
+
+        for filename in missingFilenames:
+            # there's a bug where this was making ValueError since the
+            # filename wasn't underneath the input directory. The bug
+            # is that the polling stops on the first error, requiring
+            # a db restart.
+            ctx = contextFromFilename(filename, self.contextPrefix,
+                                      self.inputDirectory)
+            log.info("input file %s disappeared, clearing %s" % (filename, ctx))
+            self.graph.remove((None, None, None), context=ctx)
+            self.removeImportRecord(ctx)
 
     def logFileError(self, filename, logFunc, msg):
         if msg == self.lastError.get(filename, None):
@@ -55,33 +75,37 @@ class SyncImport(object):
         self.lastError[filename] = msg
         logFunc(msg)
 
-    def updatedFiles(self):
-        """filenames that are newer than the mtime we have in the graph
+    def allInputFiles(self):
+        """filenames in the input tree
 
         Names are relative to the inputDirectory."""
         for root, dirs, files in os.walk(self.inputDirectory):
-
             for filename in files:
-                try:
-                    filename = os.path.join(root, filename)
-                    mtime = os.path.getmtime(filename)
-                    try:
-                        ctx = contextFromFilename(filename, self.contextPrefix,
-                                                  self.inputDirectory)
-                    except ValueError, e:
-                        
-                        self.logFileError(filename, log.debug,
-                              "filename %s doesn't tell us a context- "
-                              "skipping (%s)" % (filename, e))
+                filename = os.path.join(root, filename)
+                yield filename
+                
+    def fileIsUpdated(self, filename):
+        """is the file's mtime newer than when we last imported it"""
+        try:
+            mtime = os.path.getmtime(filename)
+            try:
+                ctx = contextFromFilename(filename, self.contextPrefix,
+                                          self.inputDirectory)
+            except ValueError, e:
+                self.logFileError(filename, log.debug,
+                      "filename %s doesn't tell us a context- "
+                      "skipping (%s)" % (filename, e))
 
-                        continue
-                    if self.lastImportTimeSecs(ctx) < mtime:
-                        log.info("need reload of %s", filename)
-                        yield filename
-                except KeyboardInterrupt: raise
-                except Exception, e:
-                    self.logFileError(filename, log.warn,
-                              "error scanning file %s: %s" % (filename, e))
+                return False
+            if self.lastImportTimeSecs(ctx) < mtime:
+                log.debug("%s < %s, file %s is updated" %
+                          (self.lastImportTimeSecs(ctx), mtime, filename))
+                return True
+        except KeyboardInterrupt: raise
+        except Exception, e:
+            self.logFileError(filename, log.warn,
+                      "error scanning file %s: %s" % (filename, e))
+        return False
                     
     def reloadContext(self, filename):
         """update the context to contain the contents of the
@@ -95,7 +119,7 @@ class SyncImport(object):
         try:
             ext = os.path.splitext(filename)[1].replace('.', '')
             self.graph.safeParse(filename, publicID=ctx, format=ext)
-            self.setLastImportTime(ctx, time.time())
+            self.setLastImportTime(ctx, time.time(), filename)
         except (xml.sax._exceptions.SAXParseException,
                 ParseError), e:
             log.warn("parse error reading file. (%s)", e)
@@ -108,18 +132,28 @@ class SyncImport(object):
         if it was never imported"""
         importTime = self.graph.value(context, IMP['lastImportTime'])
         if importTime is None:
+            log.debug("no imp:lastImportTime for %s" % context)
             return None
-        return iso8601.parse(importTime)
+        return iso8601.parse(str(importTime))
         
+    def allImportedFilenames(self):
+        rows = self.graph.queryd(
+            "SELECT ?f WHERE { ?ctx <%s> ?f }" % IMP['filename'])
+        return set([row['f'] for row in rows])
 
-    def setLastImportTime(self, context, secs):
+    def setLastImportTime(self, context, secs, filename):
         """remember the import time for a context"""
 
-        self.graph.remove((context, IMP['lastImportTime'], None),
-                          context=IMP['dbInternal#context'])
-        
+        self.removeImportRecord(context)
         self.graph.add((context, IMP['lastImportTime'],
                         Literal(iso8601.tostring(secs, time.altzone),
                                 datatype=XS["dateTime"])),
+                       (context, IMP['filename'], Literal(filename)),
                        context=IMP['dbInternal#context'])
 
+    def removeImportRecord(self, context):
+        log.debug("dropping metadata for context %s" % context)
+        self.graph.remove((context, IMP['lastImportTime'], None),
+                          (context, IMP['filename'], None),
+                          context=IMP['dbInternal#context'])
+        

@@ -4,6 +4,8 @@ from nevow import tags as T, flat, inevow
 from twisted.python.components import Adapter
 from zope.interface import implements
 
+# change site to nevowsite, and the old/new resourcs will work
+
 class Stats(object):
     """gather and report stats about the queries that are made, their
     errors, runtimes, etc"""
@@ -75,7 +77,7 @@ class Stats(object):
                 T.li[T.span["Last query:"],
                      T.pre[reindent(self.lastQuery)],
                      T.span["Again, as one line:"],
-                     T.div[self.lastQuery.replace('\n','')],
+                     T.div[(self.lastQuery or '').replace('\n','')],
                      ],
                 
                 T.li[T.span["All query types, by total time spent"],

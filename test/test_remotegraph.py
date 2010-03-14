@@ -5,13 +5,14 @@ more tests needed:
   more error cases
 """
 
-import os, sys
+import os, sys, logging
 from twisted.trial import unittest
 from twisted.internet import reactor
 import twisted.web
 from rdflib import Namespace, Literal, RDFS, BNode, Variable, URIRef
 from rdflib.Graph import Graph
 from rdflib.exceptions import UniquenessError
+import rdflib
 
 sys.path.append("..")
 from sparqlhttp.remotegraph import RemoteGraph
@@ -20,6 +21,9 @@ from sparqlhttp.dictquery import Graph2
 
 import shared
 from shared import EXP, QUERY
+
+logging.basicConfig(level=logging.INFO)
+logging.info("rdflib version %s" % rdflib.__version__)
 
 class Cases(object):
     """these are closely based on the simple cases in
@@ -211,6 +215,13 @@ class Cases(object):
             self.assertEqual(result, '')
         return d
 
+    def testLabelDefault(self):
+        d = self.graph.remoteLabel(EXP['nonexist'], default="foo")
+        @d.addCallback
+        def check(result):
+            self.assertEqual(result, 'foo')
+        return d
+
     def testLabelPositive(self):
         d = self.graph.remoteLabel(EXP['labeled'])
         @d.addCallback
@@ -248,6 +259,22 @@ class Cases(object):
         @d.addCallback
         def check(value):
             self.assertEqual(value, None)
+        return d
+
+    def testRemove(self):
+        # still missing a test of remoteRemove with context arg
+        s0 = (EXP['x'], EXP['name0'], Literal("a"))
+        s1 = (EXP['x'], EXP['name1'], Literal("b"))
+        d = self.graph.remoteAdd(s0, s1, context=EXP['ctx#context'])
+        @d.addCallback
+        def rm(result):
+            d = self.graph.remoteRemove(s0)
+            d.addCallback(lambda result:
+                          self.graph.remoteQueryd("SELECT ?p { exp:x ?p ?o }"))
+            return d
+        @d.addCallback
+        def check2(result):
+            self.assertEqual(list(result), [{'p' : EXP['name1']}])
         return d
 
 ##     def testBNode(self):

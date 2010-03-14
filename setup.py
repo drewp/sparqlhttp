@@ -2,7 +2,7 @@
 from distutils.core import setup
 
 setup(name="sparqlhttp",
-      version="1.0",
+      version="1.1",
       description="HTTP SPARQL server and client for twisted and rdflib",
       author="Drew Perttula",
       author_email="drewp@bigasterisk.com",

@@ -1,3 +1,12 @@
+"""
+something's broken. these tests work separately:
+
+for x (Remove Replace Error Sync Formats Literal) { PYTHONPATH=../../rdflib/build/lib.linux-i686-2.4:../../Nevow/build/lib/ python2.4 =trial test_syncimport.SyncTestCase.test$x }
+
+but together, there's an error where FtWarning is set to None during
+cleanup and something tries to show a warning.
+"""
+
 import sys, os, traceback, logging
 from twisted.trial import unittest
 from twisted.internet import reactor, defer
@@ -126,6 +135,39 @@ class SyncTestCase(unittest.TestCase):
             
         return self.done
 
+    def testRemove(self):
+        """input file is removed"""
+        writeFile("new.nt",
+                '<http://example.org/dp> <http://example.org/now> "imhere" .\n')
+        @afterOneSec
+        @self.catchError
+        def rm():
+            self.assert_(
+                self.graph.contains((EXP['dp'], EXP['now'], Literal('imhere'))))
+            os.remove("new.nt")
+            @afterOneSec
+            @self.checkAndComplete
+            def check():
+                self.assert_(not self.graph.contains(
+                    (EXP['dp'], EXP['now'], Literal('imhere'))))
+        return self.done
+
+    def not_ready_testRemoveBeforeRun(self):
+        """some input file is removed before this process starts --
+        but i think i'm going to base this on the internal ctx's
+        records of what syncimport already read, so it's harder to
+        setup this test. And once i do set it up, it might be exactly
+        the same as testRemove.
+        """
+        self.graph.add((EXP['dp'], EXP['old'], EXP['obj']),
+                       context=EXP['old#context'])
+        @afterOneSec
+        @self.checkAndComplete
+        def check():
+            self.assert_(not self.graph.contains(
+                (EXP['dp'], EXP['old'], EXP['obj'])))
+        return self.done
+    
     def testError(self):
         """good file is replaced with a bad file, and then another good one"""
         writeFile("new.nt",
@@ -174,7 +216,9 @@ class SyncTestCase(unittest.TestCase):
             
     def testLiteral(self):
         """making this work required a patch on 2007-02-05 in
-        rdflib/syntax/parsers/ntriples.py"""
+        rdflib/syntax/parsers/ntriples.py. It doesn't even work on
+        rdflib-2.4.1.dev_r1115-py2.4-linux-i686.egg, my version is
+        still required."""
         writeFile("new.nt",
                 '<http://example.org/dp> <http://example.org/date> "2007-02-05"^^<http://www.w3.org/2001/XMLSchema#date> .\n')
         @afterOneSec

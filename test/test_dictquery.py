@@ -212,9 +212,14 @@ class TestCase(unittest.TestCase):
         self.assert_(self.graph.contains((EXP['dp'], EXP['name'],
                                           Literal("from n3"))))
     def testRemove(self):
-        self.graph.add((EXP['x'], EXP['name0'], Literal("a")),
-                       (EXP['x'], EXP['name1'], Literal("b")),
-                       context=EXP['ctx#context'])
-        self.graph.remove((EXP['x'], EXP['name0'], Literal("a")),
-                          context=EXP['ctx#context'])
-     
+        s0 = (EXP['x'], EXP['name0'], Literal("a"))
+        s1 = (EXP['x'], EXP['name1'], Literal("b"))
+        s2 = (EXP['x'], EXP['name2'], Literal("c"))
+
+        self.graph.add(s0, s1, s2, context=EXP['ctx#context'])
+
+        self.graph.remove(s0, context=EXP['ctx#context'])
+        self.assert_(not self.graph.contains(s0))
+
+        self.graph.remove(s1)
+        self.assert_(not self.graph.contains(s1))

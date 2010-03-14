@@ -1,7 +1,7 @@
-import urllib, warnings, inspect, os, md5
+import urllib, warnings, inspect, os, md5, re
 from twisted.internet import defer
 from twisted.web.client import getPage
-from rdflib import Variable, RDFS
+from rdflib import Variable, RDFS, Literal
 from rdflib.exceptions import UniquenessError
 from rdflib.Graph import Graph
 from sparqlhttp.sparqlxml import parseSparqlResults, parseCountTree
@@ -70,9 +70,16 @@ class _RemoteGraph(object):
         return getPage(self.serverUrl + request,
                        headers=_headers)
 
+    def _checkQuerySyntax(self, query):
+        if query == 'SELECT * WHERE { ?s ?p ?o. }':
+            return
+        if re.search(r"\?[a-z]+[;\.\]]", query):
+            raise ValueError("sorry, sparqlhttp is currently too fragile for your syntax. Please change ' ?foo;' to ' ?foo ;' so sparqlhttp can find the variables more easily. This was your query:\n%s" % query)        
+
     def _getQuery(self, query, initBindings, headers=None):
         """send this query to the server, return deferred to the raw
         server result. This is where the prologue (@PREFIX lines) is added."""
+        self._checkQuerySyntax(query)
         get = ('?query=' +
                urllib.quote(self.prologue +
                             interpolateSparql(query, initBindings), safe=''))
@@ -120,13 +127,8 @@ class _RemoteGraph(object):
     def remoteAdd(self, *triples, **context):
         if 'context' not in context:
             raise TypeError("must pass 'context' kw arg")
-        post = self.serverUrl + 'add?context=%s' % urllib.quote(context['context'])
-        g = Graph()
-        for stmt in triples:
-            g.add(stmt)
-        postData = g.serialize(format='nt')
-        d = getPage(post, method='POST', postdata=postData)
-        return d
+        post = self.serverUrl + 'add?context=%s' % urllib.quote(context['context'], safe='')
+        return self._postWithTriples(post, triples)
 
     def remoteSave(self, context):
         d = getPage(self.serverUrl + 'save?context=' + urllib.quote(context))
@@ -145,8 +147,8 @@ class _RemoteGraph(object):
             return n > 0
         return d
 
-    def remoteLabel(self, subj):
-        return self.remoteValue(subj, RDFS.label, default='', any=True)
+    def remoteLabel(self, subj, default=''):
+        return self.remoteValue(subj, RDFS.label, default=default, any=True)
 
     def remoteValue(self, subj, pred, default=None, any=False):
         d = self.remoteQueryd("SELECT DISTINCT ?o WHERE { ?s ?p ?o }",
@@ -162,11 +164,34 @@ class _RemoteGraph(object):
 
         return d
 
+    def remoteRemove(self, *triples, **context):
+        context = context.get('context', None)
+        post = self.serverUrl + 'remove'
+        if context:
+            post += '?context=%s' % urllib.quote(context, safe='')
+        return self._postWithTriples(post, triples)
+        
+    def _postWithTriples(self, url, triples):
+        g = graphFromTriples(triples)
+        postData = g.serialize(format='nt')
+        d = getPage(url, method='POST', postdata=postData)
+        return d
+
+                  
+
+def graphFromTriples(triples):
+    g = Graph()
+    for stmt in triples:
+        g.add(stmt)
+    return g
+            
+
 class LocalGraph(object):
     """this is a local (in-process) graph, but with an API that's
     compatible with RemoteGraph (i.e. the remote* methods still return
     deferreds)"""
-    def __init__(self, graph):
+    def __init__(self, graph, initNs=None):
+        assert initNs is None
         self.graph = graph
 
     def __getattr__(self, attr):
@@ -201,10 +226,12 @@ def RemoteGraph(graph=None, serverUrl=None, **kw):
 
 def interpolateSparql(query, initBindings):
     """expand the bindings into the query string to make one
-    standalone query
+    standalone query. Very sloppy; probably gets quoting wrong.
 
     >>> interpolateSparql('SELECT ?x { ?x ?y ?z }', {Variable('?z') : Literal('hi')})
-    'SELECT ?x { ?x ?y "hi" }'
+    u'SELECT ?x { ?x ?y "hi" }'
+    >>> interpolateSparql('SELECT ?x { ?x <http://example/?z=1> ?z }', {Variable('?z') : Literal('hi')})
+    u'SELECT ?x { ?x <http://example/?z=1> "hi" }'
     """
     prolog = query[:query.find('{')]
     text = query[query.find('{'):]
@@ -212,7 +239,13 @@ def interpolateSparql(query, initBindings):
 #    print "Sel is", selection
     for var, value in initBindings.items():
         if '?' + var not in selection:
-            text = text.replace(var, value.n3())
+            # hopefully you don't have spaces in your urls, and you do
+            # have spaces on both sides of all variable names
+            text = text.replace(' %s ' % var, ' %s ' % value.n3())
     query = prolog + text
 #    print "Expand to", query
     return query 
+
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod()

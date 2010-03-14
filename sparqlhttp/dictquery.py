@@ -142,8 +142,8 @@ class Graph2(object):
                                           Variable('?o') : stmt[2]})
         return any > 0
 
-    def label(self, subj):
-        return self.value(subj, RDFS.label, default='')
+    def label(self, subj, default=''):
+        return self.value(subj, RDFS.label, default=default)
 
     def value(self, subj, pred, default=None):
         rows = iter(self.queryd("SELECT ?value WHERE { ?s ?p ?value }",
@@ -215,10 +215,16 @@ class Graph2(object):
             len(subgraph) / (now - t1)))
         self.graph.commit()
 
-    def remove(self, stmt, context):
+    def remove(self, *triples, **context):
         """graph.get_context(context).remove(stmt)"""
         self._graphModified()
-        self.graph.get_context(context).remove(stmt)
+        context = context.get('context')
+        if context is None:
+            g = self.graph
+        else:
+            g = self.graph.get_context(context)
+        for triple in triples:
+            g.remove(triple)
 
 def fixDatatypedLiterals(query, initBindings):
     """workaround for sparql parser bug:
@@ -319,3 +325,5 @@ def contextFromFilename(filename, prefix, rootDir, allowedExtensions=['.nt', '.n
     if ext not in allowedExtensions:
         raise ValueError("filename %r has an unknown extension" % filename)
     return URIRef("%s%s#context" % (prefix, base[len(rootDir):]))
+
+

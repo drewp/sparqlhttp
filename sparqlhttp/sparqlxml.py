@@ -105,7 +105,11 @@ def parseSparqlResults(xmlResults):
 
     This is the inverse of xmlResults."""
     if isinstance(xmlResults, basestring):
-        tree = ElementTree.fromstring(xmlResults)
+        try:
+            tree = ElementTree.fromstring(xmlResults)
+        except Exception, e:
+            raise e.__class__("error parsing %r: %s" % (xmlResults, e))
+            raise
     else:
         tree = xmlResults
 
