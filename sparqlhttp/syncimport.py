@@ -17,6 +17,8 @@ todo:
 when scanning a file that was broken, don't relog the exact same error
 
 web interface to examine the dbInternal context
+
+an error in the poll makes it stop running for the rest of the process
 """
 from __future__ import division
 import os, time, logging, traceback
@@ -63,8 +65,15 @@ class SyncImport(object):
             # filename wasn't underneath the input directory. The bug
             # is that the polling stops on the first error, requiring
             # a db restart.
-            ctx = contextFromFilename(filename, self.contextPrefix,
-                                      self.inputDirectory)
+            try:
+                ctx = contextFromFilename(filename, self.contextPrefix,
+                                          self.inputDirectory)
+            except ValueError:
+                # if we can't figure out the context, it might be
+                # because this filename is handled by a different
+                # SyncImport with another inputDirectory, which is
+                # cool
+                continue
             log.info("input file %s disappeared, clearing %s" % (filename, ctx))
             self.graph.remove((None, None, None), context=ctx)
             self.removeImportRecord(ctx)
@@ -87,7 +96,6 @@ class SyncImport(object):
     def fileIsUpdated(self, filename):
         """is the file's mtime newer than when we last imported it"""
         try:
-            mtime = os.path.getmtime(filename)
             try:
                 ctx = contextFromFilename(filename, self.contextPrefix,
                                           self.inputDirectory)
@@ -97,6 +105,7 @@ class SyncImport(object):
                       "skipping (%s)" % (filename, e))
 
                 return False
+            mtime = os.path.getmtime(filename)
             if self.lastImportTimeSecs(ctx) < mtime:
                 log.debug("%s < %s, file %s is updated" %
                           (self.lastImportTimeSecs(ctx), mtime, filename))

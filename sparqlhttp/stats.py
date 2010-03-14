@@ -1,5 +1,5 @@
 from __future__ import division
-import os, textwrap
+import os, textwrap, time
 from nevow import tags as T, flat, inevow
 from twisted.python.components import Adapter
 from zope.interface import implements
@@ -10,10 +10,11 @@ class Stats(object):
     """gather and report stats about the queries that are made, their
     errors, runtimes, etc"""
     def __init__(self):
+        self.powerOnTime = time.time()
         self.queries = 0
         self.lastErrorQuery = ""
         self.lastError = ""
-        self.lastQuery = None
+        self.lastQuery = ''
 
         self.counts = {} # (queryKey, bound) : (query, n, total elapsed, total rows)
         self.sources = {} # query : [sources]
@@ -46,20 +47,43 @@ class Stats(object):
         prof = QueryProfileView(self)
         prof.original = self
         profStan = prof.rend(None)
+
+        upHours = (time.time() - self.powerOnTime) / 3600
+        oneLine = (self.lastQuery or '').replace('\n',' ')
         
         return str(flat.flatten(T.html[
             T.head[T.title[title],
                    T.style(type="text/css")['''
-                        table, td, th {
-                          border: 1px solid black;
+                       span, div {
+                         font-family: sans-serif;
+                       }
+                       div.one-line-query {
+                         border: 1px solid #ccc;
+                         padding: .2em;
+                         background: #f8f8ff;
+                       }
+                       h2 {
+                         color: #6e5636;
+                         margin-left: -.5em;
+                       }
+
+                       table, td, th {
+                          border-top: 1px solid #ddd;
                           border-collapse: collapse;
+                        }
+                        th, table {
+                          border-top: 0px;
                         }
                         th {
                           font-size: 80%;
+                          padding-left: .5em;
+                          padding-right: .5em;
                         }
-                        li {
+                        div.section {
                           padding: 3px;
                           margin-bottom: 6px;
+                  
+                          margin-left: 1em;
                         }
                         span, th {
                           color:#A2927E;
@@ -69,27 +93,38 @@ class Stats(object):
                    ],
             T.body[
               T.h1[title],
-              T.ul[
-                T.li[self.queries, T.span[" queries"]],
-                T.li[T.span["Last error:"],
-                     T.div[T.span["query: "], T.pre[self.lastErrorQuery]],
-                     T.div[T.span["error: "], T.pre[self.lastError]]],
-                T.li[T.span["Last query:"],
-                     T.pre[reindent(self.lastQuery)],
-                     T.span["Again, as one line:"],
-                     T.div[(self.lastQuery or '').replace('\n','')],
+
+              T.div(class_="section")[T.h2["Stats"],
+                                      T.div[T.span["Up for "],
+                                            "%.1f" % upHours, T.span[" hours"]],
+                                      T.div[self.queries, T.span[" queries"]]],
+              T.div(class_="section")[T.h2["Last error"],
+                                      T.div[T.span["query: "],
+                                            T.pre[self.lastErrorQuery]],
+                                      T.div[T.span["error: "],
+                                            T.pre[self.lastError]]],
+              T.div(class_="section")[T.h2["Last query"],
+                                      T.pre[reindent(self.lastQuery)],
+                                      T.span["Again, as one line:"],
+                                      T.div(class_="one-line-query")[oneLine],
                      ],
                 
-                T.li[T.span["All query types, by total time spent"],
-                     profStan],
-                ]
+              T.div(class_="section")[T.h2["All query types, by total time spent"],
+                                      profStan],
+              
               ]
             ]))
         
-    
+
+def stripPrefixes(q):
+    """remove PREFIX lines from a query"""
+    new = ""
+    for line in q.splitlines():
+        if not line.strip().startswith("PREFIX"):
+            new += line + "\n"
+    return new
 
 def reindent(s, width=80):
-
     """strip off the most whitespace from all lines except first/last,
     and indent 2 spaces. Then cut lines over {width} chars and indent
     the wraps"""
@@ -115,6 +150,8 @@ class QueryProfileView(Adapter):
     implements(inevow.IRenderer)
 
     def shortFilename(self, fname):
+        if fname is None: # client might not be sending filenames
+            return ''
         return os.path.basename(fname)
 
     def rend(self, data):
@@ -125,8 +162,8 @@ class QueryProfileView(Adapter):
 #                rowCount = "(count) %s" % rowCount
             return (elapsed, T.tr[T.td["%.2f (%.4f)" % (elapsed, elapsed / n)],
                                   T.td[n],
-                                  T.td[T.pre[reindent(query)]],
-                                  T.td[repr(k[1])],
+                                  T.td[T.pre[reindent(stripPrefixes(query))]],
+                                  T.td[repr(k[1]) or ''],
                                   T.td["%.1f" % (rowCount / n)],
                                   T.td[[T.div[self.shortFilename(s)] for s in
                                         self.original.sources.get(k,'')]],
@@ -137,7 +174,7 @@ class QueryProfileView(Adapter):
         return T.table(class_="queryProfile")[
             T.tr[T.th["total secs (per)"],
                  T.th["count"],
-                 T.th["query (with sample initBindings)"],
+                 T.th["query (with sample initBindings; prefixes hidden)"],
                  T.th["bound"],
                  T.th["avg rows"],
                  T.th["sources"]],

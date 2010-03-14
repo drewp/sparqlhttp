@@ -24,9 +24,18 @@ class _RemoteGraph(object):
     those are the ones to override when you're adding a cache, for
     example.
     """
-    def __init__(self, serverUrl, initNs=None):
+    def __init__(self, serverUrl, initNs=None, sendSourceLine=False):
+        """
+        turn on sendSourceLine and the client will put an
+        x-source-line header in every request. The server report shows
+        those lines in the query profile screen, which means it'll
+        tell you exactly where your slow queries are in the
+        source. The tradeoff is that getting the source line (per
+        request) can be slow. Maybe milliseconds per req, I forget.
+        """
         if not serverUrl.endswith('/'):
             warnings.warn("serverUrl should end with '/', like 'http://localhost:8000/'")
+        self.sendSourceLine = sendSourceLine
         self.serverUrl = serverUrl
         self.prologue = ""
         if initNs:
@@ -59,12 +68,13 @@ class _RemoteGraph(object):
     def _serverGet(self, request, headers=None):
         """deferred to the result of GET /{request}"""
         _headers = {}
-        try:
-            frame = self._callerFrame()
-            _headers = {'x-source-line' :
-                       "%s:%s" % (frame.f_code.co_filename, frame.f_lineno)}
-        except ValueError:
-            pass
+        if self.sendSourceLine:
+            try:
+                frame = self._callerFrame()
+                _headers = {'x-source-line' :
+                           "%s:%s" % (frame.f_code.co_filename, frame.f_lineno)}
+            except ValueError:
+                pass
         if headers is not None:
             _headers.update(headers)
         return getPage(self.serverUrl + request,

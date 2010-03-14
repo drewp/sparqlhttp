@@ -67,10 +67,12 @@ class SPARQLResource(Resource):
             except TypeError,e:
                 count = 0 # this bogus value only affects the stats
 
+        bindings = (request.getHeader('x-bindings') or "").split()
+        queryKey = request.getHeader('x-uninterpolated-query-checksum') or query
         self.stats.ran(request.getHeader('x-source-line'),
                        query,
-                       request.getHeader('x-uninterpolated-query-checksum'),
-                       request.getHeader('x-bindings').split(),
+                       queryKey,
+                       bindings,
                        time.time() - t1,
                        count)
 

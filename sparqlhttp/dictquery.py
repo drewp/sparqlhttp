@@ -64,10 +64,6 @@ class Graph2(object):
 
         The other query methods are implemented using this one."""
 
-        # this implementation is dumb, but I didn't bother with a
-        # better one because the real sparql query method already has
-        # the right dict at some point. It just doesn't return the
-        # dict.
         if initBindings is None:
             initBindings = {}
 
@@ -83,6 +79,10 @@ class Graph2(object):
             return rows.serialize(format=format)
         rows = list(rows)
         def returnIterator():
+            # this implementation is dumb, but I didn't bother with a
+            # better one because the real sparql query method already has
+            # the right dict at some point. It just doesn't return the
+            # dict.
             selection = sparqlSelection(query)
             for row in rows:
                 yield dict(zip([x[1:] for x in selection], row))
