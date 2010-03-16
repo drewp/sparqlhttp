@@ -128,6 +128,8 @@ class _RemoteGraph(object):
                        }
         if self.resultFormat == 'json':
             sendHeaders['Accept'] = 'application/sparql-results+json'
+        else:
+            sendHeaders['Accept'] = 'application/sparql-results+xml'
             
         if headers:
             sendHeaders.update(headers)
