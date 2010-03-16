@@ -1,15 +1,25 @@
 #!/usr/bin/python
-
-import sys
+"""
+demo client that uploads a local .nt file to the server (with a fixed
+context URI)
+"""
+import sys, optparse
 from sparqlhttp.remotegraph import RemoteGraph
 from sparqlhttp.oneshot import run
 
 from rdflib.Graph import Graph
 from rdflib import URIRef
 
-graph = RemoteGraph(serverUrl="http://localhost:9991/")
+parser = optparse.OptionParser()
+parser.add_option('-s', '--server', help='server endpoint URL')
+opts, args = parser.parse_args()
 
-ntFilename = sys.argv[1]
+if not opts.server:
+    parser.error("--server is required")
+    
+graph = RemoteGraph(serverUrl=opts.server)
+
+ntFilename = args[0]
 
 localGraph = Graph()
 localGraph.parse(ntFilename, format='nt')
@@ -18,4 +28,3 @@ stmts = list(localGraph.triples((None,None,None)))
 d = graph.remoteAdd(*stmts,
           **dict(context=URIRef("http://example.org/#context")))
 run(d)
-
