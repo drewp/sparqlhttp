@@ -1,0 +1,12 @@
+update setup.py version
+
+darcs tag -m "release 1.x"   
+
+python setup.py sdist
+cp dist/sparqlhttp-1.x.tar.gz /my/site/projects/sparqlhttp
+
+update download links on web page
+
+python setup.py register
+
+changelog?
