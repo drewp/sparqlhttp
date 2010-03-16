@@ -12,7 +12,8 @@ from rdflib.Graph import ConjunctiveGraph
 parser = optparse.OptionParser()
 parser.add_option('-p', '--port', help='port to listen on',
                   type='int', default=9991)
-parser.add_option('--home', help='berkeley db home', default='.')
+parser.add_option('--home', help='berkeley db home (~12 files will be '
+                  'created here)', default='.')
 opts, args = parser.parse_args()
 
 log.startLogging(sys.stdout)
