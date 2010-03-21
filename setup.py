@@ -7,7 +7,7 @@ setup(name="sparqlhttp",
       author="Drew Perttula",
       author_email="drewp@bigasterisk.com",
       url="http://projects.bigasterisk.com/sparqlhttp/",
-      download_url="http://projects.bigasterisk.com/sparqlhttp-1.4.tar.gz",
+      download_url="http://projects.bigasterisk.com/sparqlhttp/sparqlhttp-1.4.tar.gz",
 
       packages=['sparqlhttp'],
       py_modules=['test.shared'],
