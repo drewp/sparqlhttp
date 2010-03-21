@@ -1,4 +1,4 @@
-update setup.py version
+update setup.py version (two places)
 
 darcs tag -m "release 1.x"   
 
