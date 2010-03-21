@@ -28,7 +28,7 @@ pre.output {
 </head>
 <body>
 
-<h1>HTTP SPARQL server for twisted and rdflib</h1>
+<h1>HTTP SPARQL server and client for twisted and rdflib</h1>
 
 <p>
 This library is for programs that use twisted for networking, use
@@ -67,6 +67,8 @@ to setup the http connection.
 
 <h2>Download</h2>
 
+<p><a href="http://bigasterisk.com/darcs/?r=sparqlhttp">Darcs source code repository</a></p>
+
 <div><a href="sparqlhttp-1.4.tar.gz">sparqlhttp-1.4.tar.gz</a> (2010-03-20) minor packaging fixes <a href="changelog-1.4">(full changelog)</a></div>
 <div><a href="sparqlhttp-1.3.tar.gz">sparqlhttp-1.3.tar.gz</a> (2009-10-12) <a href="changelog-1.3">changelog</a></div>
 <div><a href="sparqlhttp-1.2.tar.gz">sparqlhttp-1.2.tar.gz</a> (2008-02-06) <a href="changelog-1.2">changelog</a></div>
@@ -80,6 +82,14 @@ to setup the http connection.
 <li><a href="http://effbot.org/zone/element-index.htm">elementtree</a></li>
 <li><a href="http://rdflib.net/">rdflib 2.3.3 +</a></li>
 <li><a href="http://divmod.org/trac/wiki/DivmodNevow">nevow</a> (<a href="http://twistedmatrix.com/trac/">twisted</a>, zope.interface)</li>
+</ul>
+
+<h2>Future plans</h2>
+<ul>
+  <li>Remove the ad-hoc update protocol and share <a href="http://www.openrdf.org/doc/sesame2/system/ch08.html#d0e304">sesame's</a> (does anyone want <a href="http://www.w3.org/TR/sparql11-update/">sparql 1.1 update</a> yet?)</li>
+  <li>Complete the support for reading and writing all the sparql results formats (xml, json, sesame binary), and try to share this code with other projects like <a href="http://sparql-wrapper.sourceforge.net/">sparql-wrapper</a></li>
+  <li>Clean up the RemoteGraph factory code</li>
+  <li>Incorporate the sync version of Graph2 that I have, and organize all the local/remote sync/async versions of everything</li>
 </ul>
 
 <h2>Demo</h2>
