@@ -33,13 +33,15 @@ class _RemoteGraphSync(_RemoteGraph):
         _RemoteGraph.__init__(self, serverUrl, initNs, sendSourceLine,
                               resultFormat)
         self.serverUrl = serverUrl
-        self.resource = restkit.Resource(serverUrl)
+        self.resource = restkit.Resource(serverUrl, headers={
+            "Accept" : "application/sparql-results+xml",
+            })
         
     def _serverGet(self, request, headers=None):
         """deferred to the result of GET {serverUrl}{request}"""
         args = cgi.parse_qs(request.lstrip('?'))
         args['headers'] = self._withSourceLineHeaders(headers)
-        return defer.succeed(self.resource.get('', **args))
+        return defer.succeed(self.resource.get(**args))
             
     def remoteSave(self, context):
         return defer.succeed(self.resource.get('save', context=context))
