@@ -1,5 +1,5 @@
 from __future__ import division
-import traceback, time, logging
+import traceback, time, logging, warnings
 from twisted.web import http
 from twisted.web.resource import Resource
 from rdflib import Literal, URIRef
@@ -34,6 +34,7 @@ class SPARQLResource(Resource):
             return self.getQuery(request)
         
         if request.path == '/save':
+            warnings.warn('Use POST for /save requests', DeprecationWarning)
             return self.getSave(request)
         
         request.setResponseCode(http.BAD_REQUEST)
@@ -121,6 +122,9 @@ class SPARQLResource(Resource):
             log.debug("remove %s stmts from context=%s", len(stmts), arg)
             self.graph.remove(*stmts, **dict(context=arg))
             return "removed from context %s" % str(arg)
+
+        if request.path == '/save':
+            return self.getSave(request)
 
         request.setResponseCode(http.BAD_REQUEST)
         return "<html>unknown post path %r</html>" % request.postpath
