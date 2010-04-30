@@ -2,15 +2,14 @@
 from distutils.core import setup
 
 setup(name="sparqlhttp",
-      version="1.4",
+      version="1.5",
       description="HTTP SPARQL server and client for twisted and rdflib",
       author="Drew Perttula",
       author_email="drewp@bigasterisk.com",
       url="http://projects.bigasterisk.com/sparqlhttp/",
-      download_url="http://projects.bigasterisk.com/sparqlhttp/sparqlhttp-1.4.tar.gz",
+      download_url="http://projects.bigasterisk.com/sparqlhttp/sparqlhttp-1.5.tar.gz",
 
       packages=['sparqlhttp'],
-      py_modules=['test.shared'],
       data_files=[('', ['doc.html'])],
       package_data={'sparqlhttp' : ['query']},
       

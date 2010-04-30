@@ -1,5 +1,8 @@
 update setup.py version (two places)
 
+run 'python setup.py sdist', go to a blank virtualenv somewhere, and
+try to easy_install the prospective .tgz
+
 darcs tag -m "release 1.x"   
 
 python setup.py sdist

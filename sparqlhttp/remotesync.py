@@ -5,6 +5,7 @@ synchronous version of RemoteGraph, using restkit
 from remotegraph import _RemoteGraph
 from twisted.internet import defer
 import cgi, restkit
+assert restkit.__version__ > '1.', "this module uses HttpResponse.body, which showed up around restkit version 1"
 
 def sync(result):
     res = []
@@ -41,7 +42,7 @@ class _RemoteGraphSync(_RemoteGraph):
         """deferred to the result of GET {serverUrl}{request}"""
         args = cgi.parse_qs(request.lstrip('?'))
         args['headers'] = self._withSourceLineHeaders(headers)
-        return defer.succeed(self.resource.get(**args))
+        return defer.succeed(self.resource.get(**args).body)
             
     def remoteSave(self, context):
         return defer.succeed(self.resource.get('save', context=context))
@@ -49,7 +50,7 @@ class _RemoteGraphSync(_RemoteGraph):
     def _deferredPost(self, url, postData):
         path, args = self._splitArgs(url)
         ret = self.resource.post(path, payload=postData, **args)
-        return defer.succeed(ret)
+        return defer.succeed(ret.body)
 
     def _splitArgs(self, url):
         """
