@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-from distutils.core import setup
+
+from setuptools import setup
 
 setup(name="sparqlhttp",
       version="1.5",
@@ -9,10 +10,13 @@ setup(name="sparqlhttp",
       url="http://projects.bigasterisk.com/sparqlhttp/",
       download_url="http://projects.bigasterisk.com/sparqlhttp/sparqlhttp-1.5.tar.gz",
 
+      setup_requires=['setuptools_trial >= 0.5'],
+
       packages=['sparqlhttp'],
       data_files=[('', ['doc.html'])],
       package_data={'sparqlhttp' : ['query']},
-      
+      test_suite="sparqlhttp.test",
+
       classifiers=[ # http://www.python.org/pypi?:action=list_classifiers
         "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",

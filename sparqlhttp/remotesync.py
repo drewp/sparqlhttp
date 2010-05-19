@@ -26,9 +26,6 @@ def makeSync(func):
     
 
 class _RemoteGraphSync(_RemoteGraph):
-    """same as RemoteGraph, but nothing returns deferred; they all
-    block and return their result
-    """
     def __init__(self, serverUrl, initNs=None, sendSourceLine=False,
                  resultFormat='json'):
         _RemoteGraph.__init__(self, serverUrl, initNs, sendSourceLine,
@@ -47,9 +44,28 @@ class _RemoteGraphSync(_RemoteGraph):
     def remoteSave(self, context):
         return defer.succeed(self.resource.get('save', context=context))
 
-    def _deferredPost(self, url, postData):
+    def remoteRemove(self, *triples, **context):
+        context = context.get('context', None)
+
+        # more efficient and atomic would be to use the xml txn
+        # format. But this was faster to write.
+
+        ctxArgs = {}
+        if context:
+            ctxArgs['context'] = context.n3()
+        for stmt in triples:
+            self.resource.delete(path='statements',
+                                 subj=stmt[0].n3(),
+                                 pred=stmt[1].n3(),
+                                 obj=stmt[2].n3(), **ctxArgs)
+        return defer.succeed('ok')
+        
+
+    def _deferredPost(self, url, postData, method='POST'):
         path, args = self._splitArgs(url)
-        ret = self.resource.post(path, payload=postData, **args)
+        ret = self.resource.request(method, path, payload=postData, 
+                                    headers={'Content-Type' : 'text/plain'},
+                                    **args)
         return defer.succeed(ret.body)
 
     def _splitArgs(self, url):
@@ -70,6 +86,9 @@ class _RemoteGraphSync(_RemoteGraph):
             return reqPart, {}
 
 class RemoteGraphSync(object):
+    """same as RemoteGraph, but nothing returns deferred; they all
+    block and return their result
+    """
     def __init__(self, serverUrl, initNs=None, sendSourceLine=False,
                  resultFormat='json'):
         self.rgs = _RemoteGraphSync(serverUrl, initNs, sendSourceLine,

@@ -191,15 +191,14 @@ class _RemoteGraph(object):
     def remoteAdd(self, *triples, **context):
         if 'context' not in context:
             raise TypeError("must pass 'context' kw arg")
-        post = self.serverUrl + 'add?context=%s' % urllib.quote(context['context'], safe='')
+        post = self.serverUrl.rstrip('/') + '/statements?context=%s' % urllib.quote(context['context'].n3(), safe='')
         return self._postWithTriples(post, triples)
 
     def remoteSave(self, context):
-        d = getPage(self.serverUrl + 'save?context=' + urllib.quote(context))
+        d = getPage(self.serverUrl.rstrip('/') + '/save?context=' + urllib.quote(context))
         return d
 
     def remoteContains(self, stmt):
-        import warnings
         warnings.warn("remoteContains was returning true for a false <user> a ffg:admin statement")
         bindings = {}
         for termName, value in zip(['s', 'p', 'o'], stmt):
@@ -231,19 +230,28 @@ class _RemoteGraph(object):
         return d
 
     def remoteRemove(self, *triples, **context):
+        raise NotImplementedError("just revert this")
         context = context.get('context', None)
-        post = self.serverUrl + 'remove'
+        post = self.serverUrl.rstrip('/') + '/statements'
         if context:
-            post += '?context=%s' % urllib.quote(context, safe='')
-        return self._postWithTriples(post, triples)
+            post += '?context=%s' % urllib.quote(context.n3(), safe='')
+        return self._postWithTriples(post, triples, method="DELETE")
         
-    def _postWithTriples(self, url, triples):
+    def _postWithTriples(self, url, triples, method='POST'):
         g = graphFromTriples(triples)
         postData = g.serialize(format='nt')
-        return self._deferredPost(url, postData)
+        return self._deferredPost(url, postData, method)
 
-    def _deferredPost(self, url, postData):
-        return getPage(url, method='POST', postdata=postData)
+    def _deferredPost(self, url, postData, method='POST'):
+        d = getPage(url, method=method, postdata=postData,
+                    headers={'Content-Type' : 'text/plain'})
+        def notError(err):
+            # workaround for twisted treating 204 as an error
+            if err.value.status.startswith('2'):
+                return err.value.response
+            err.raiseException()
+        d.addErrback(notError)
+        return d
                   
 
 def graphFromTriples(triples):

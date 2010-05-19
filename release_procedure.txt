@@ -12,4 +12,5 @@ cp dist/sparqlhttp-1.x.tar.gz /my/site/projects/sparqlhttp
 
 python setup.py register
 
-changelog?
+darcs cha, put interesting lines into
+   /my/site/projects/sparqlhttp/changelog-1.x

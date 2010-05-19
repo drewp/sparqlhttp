@@ -10,7 +10,7 @@ from sparqlhttp.dictquery import Graph2
 from shared import EXP, QUERY, XS
 import shared
 
-log = logging.basicConfig(level=logging.DEBUG)
+log = logging.basicConfig(level=logging.WARN)
 print "rdflib", rdflib
 
 class TestCase(unittest.TestCase):
