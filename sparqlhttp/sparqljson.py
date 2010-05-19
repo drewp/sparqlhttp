@@ -1,4 +1,4 @@
-from nevow import json
+import jsonlib
 from rdflib import Literal, URIRef
 
 def parseJsonResults(jsonResults):
@@ -18,7 +18,7 @@ def parseJsonResults(jsonResults):
     """
 
     ret = []
-    for row in json.parse(jsonResults)['results']['bindings']:
+    for row in jsonlib.loads(jsonResults)['results']['bindings']:
         outRow = {}
         for k, v in row.items():
             outRow[k] = parseJsonTerm(v)
@@ -28,7 +28,7 @@ def parseJsonResults(jsonResults):
 
 def jsonRowCount(jsonResults):
     """given a json string like parseJsonTerm takes, just count the rows"""
-    return len(json.parse(jsonResults)['results']['bindings'])
+    return len(jsonlib.loads(jsonResults)['results']['bindings'])
     
 def parseJsonTerm(d):
     """rdflib object (Literal, URIRef, BNode) for the given json-format dict.

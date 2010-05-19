@@ -97,10 +97,7 @@ class _RemoteGraph(object):
         return _headers
 
     def _checkQuerySyntax(self, query):
-        if query == 'SELECT * WHERE { ?s ?p ?o. }':
-            return
-        if re.search(r"\?[a-z]+[;\.\]]", query):
-            raise ValueError("sorry, sparqlhttp is currently too fragile for your syntax. Please change ' ?foo;' to ' ?foo ;' so sparqlhttp can find the variables more easily. This was your query:\n%s" % query)        
+        return _checkQuerySyntax(query)
 
     def _getQuery(self, query, initBindings, headers=None):
         """send this query to the server, return deferred to the raw
@@ -147,23 +144,7 @@ class _RemoteGraph(object):
         return d
 
     def _addOptionalVars(self, rows, query):
-        """augment the rows with 'x':None values for any query
-        variable x that happened not to be bound in that row. This is
-        for consistency with rdflib's sparql results, which always
-        include all the vars in their result tuple.
-
-        The parseJsonResults (and parseSparqlResults) version totally
-        has the information to do this itself, but it seemed easier to
-        write it here. This second pass might be a little bit slower.
-
-        rows are edited in-place, and then returned.
-        """
-        vars = [v.strip('?') for v in sparqlSelection(query)]
-        for row in rows:
-            for v in vars:
-                if v not in row:
-                    row[v] = None
-        return rows
+        return _addOptionalVars(rows, query)
 
     def remoteCountQuery(self, query, initBindings={}):
         # hint the server that it can return just a count (but if it
@@ -338,6 +319,32 @@ def interpolateSparql(query, initBindings):
     query = prolog + text
 #    print "Expand to", query
     return query 
+
+def _checkQuerySyntax(query):
+    if query == 'SELECT * WHERE { ?s ?p ?o. }':
+        return
+    if re.search(r"\?[a-z]+[;\.\]]", query):
+        raise ValueError("sorry, sparqlhttp is currently too fragile for your syntax. Please change ' ?foo;' to ' ?foo ;' so sparqlhttp can find the variables more easily. This was your query:\n%s" % query)        
+
+def _addOptionalVars(rows, query):
+
+    """augment the rows with 'x':None values for any query
+    variable x that happened not to be bound in that row. This is
+    for consistency with rdflib's sparql results, which always
+    include all the vars in their result tuple.
+
+    The parseJsonResults (and parseSparqlResults) version totally
+    has the information to do this itself, but it seemed easier to
+    write it here. This second pass might be a little bit slower.
+
+    rows are edited in-place, and then returned.
+    """
+    vars = [v.strip('?') for v in sparqlSelection(query)]
+    for row in rows:
+        for v in vars:
+            if v not in row:
+                row[v] = None
+    return rows
 
 if __name__ == '__main__':
     import doctest
