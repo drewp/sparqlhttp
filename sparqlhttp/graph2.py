@@ -2,6 +2,7 @@ import urllib, md5, logging, restkit
 from rdflib import RDFS
 from rdflib.exceptions import UniquenessError
 from twisted.internet import defer
+from twisted.web.client import getPage
 from sparqlhttp.sparqljson import parseJsonResults
 from sparqlhttp.remotegraph import interpolateSparql, _checkQuerySyntax, _addOptionalVars, makeDeferredFunc, graphFromTriples
 log = logging.getLogger()
@@ -145,9 +146,6 @@ class _Graph2(object):
         # more efficient and atomic would be to use the xml txn
         # format. But this was faster to write.
 
-        ctxArgs = {}
-        if context:
-            ctxArgs['context'] = context.n3()
         if not isinstance(self, SyncGraph):
             # just switch to txn, and then it'll be one request again
             # and this won't be a probelm
@@ -166,18 +164,6 @@ class _Graph2(object):
     def save(self, context):                  # for certain remote graphs
         log.warn("not saving %s" % context)
 
-    # only for backwards compatibility with the old version. These
-    # ought to all raise a warning
-    remoteValue = makeDeferredFunc(value)
-    remoteLabel = makeDeferredFunc(label)
-    remoteQueryd = makeDeferredFunc(queryd)
-    remoteSave = save
-    remoteContains = makeDeferredFunc(contains)
-    def remoteAdd(self, *triples, **ctx):
-        return defer.succeed(self.add(triples, **ctx))
-    def remoteRemove(self, *triples, **ctx):
-        return defer.succeed(self.remove(triples, **ctx))
-
 class SyncGraph(_Graph2):
     """
     Synchonous remote graph access. You must use SyncGraph or
@@ -188,11 +174,11 @@ class SyncGraph(_Graph2):
     def _request(self, method, path, queryParams,
                 headers=None, payload=None, postProcess=None):
         """
-        path is added to rootUrl
+        path is *added to* rootUrl
         """
         response = self._resource.do_request(
             method=method,
-            url=self.target+path+'?'+urllib.urlencode(queryParams),
+            url=self.target + path + '?' + urllib.urlencode(queryParams),
             headers=headers,
             payload=payload,
             )
@@ -202,6 +188,18 @@ class SyncGraph(_Graph2):
         if postProcess is not None:
             ret = postProcess(ret)
         return ret
+
+    # only for backwards compatibility with the old version. These
+    # ought to all raise a warning
+    remoteContains = makeDeferredFunc(_Graph2.contains)
+    remoteLabel = makeDeferredFunc(_Graph2.label)
+    remoteQueryd = makeDeferredFunc(_Graph2.queryd)
+    remoteSave = makeDeferredFunc(_Graph2.save)
+    remoteValue = makeDeferredFunc(_Graph2.value)
+    def remoteAdd(self, *triples, **ctx):
+        return defer.succeed(self.add(triples, **ctx))
+    def remoteRemove(self, *triples, **ctx):
+        return defer.succeed(self.remove(triples, **ctx))
 
 class AsyncGraph(_Graph2):
     """
@@ -215,17 +213,30 @@ class AsyncGraph(_Graph2):
         self._root = rootUrl
     def _request(self, method, path, queryParams,
                 headers=None, payload=None, postProcess=None):
-        assert payload is None, 'notimplemented'
-        assert method is 'GET', 'notimplemented'
+
         d = getPage(self._root + path + '?' + urllib.urlencode(queryParams),
-                       headers=headers)
-        if postProcess is not None:
-            d.addCallback(postProcess)
-        return d
-       # ...
+                    method=method,
+                    postdata=payload,
+                    headers=headers)
+
         def notError(err):
             # workaround for twisted treating 204 as an error
             if err.value.status.startswith('2'):
                 return err.value.response
             err.raiseException()
         d.addErrback(notError)
+
+        if postProcess is not None:
+            d.addCallback(postProcess)
+        return d
+
+    # backwards compatibility. Should print warnings
+    remoteContains = _Graph2.contains
+    remoteLabel = _Graph2.label
+    remoteQueryd = _Graph2.queryd
+    remoteSave = _Graph2.save
+    remoteValue = _Graph2.value
+    def remoteAdd(self, *triples, **ctx):
+        return self.add(triples, **ctx)
+    def remoteRemove(self, *triples, **ctx):
+        return self.remove(triples, **ctx)
