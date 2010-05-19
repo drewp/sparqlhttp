@@ -1,0 +1,42 @@
+The classes are a mess. Here's how they should look:
+
+    def queryd(self, query, initBindings=None, format='python'): 
+    def countQuery(self, query, initBindings={}):
+    def add(self, triples, ctx):              # changed to a list, not *args
+    def contains(self, stmt):
+    def label(self, subj, default=''):
+    def value(self, subj, pred, default=None):
+    def subgraphLength(self, ctx):
+    def subgraphClear(self, ctx):
+    def dumpAllStatements(self):
+    def remove(self, triples, ctx):           # changed to a list, not *args
+    def save(self, context):                  # for certain remote graphs
+
+cache = None
+cache = PredicateCache(timeout...) # expires according to the predicate
+cache = SubjectCache() # invalidates everything about a subject whenever you write to it
+
+target can be an in-process rdflib berkeleydb path too
+
+graph = SyncGraph(protocol='sesame', target='http://...', cache)
+graph = AsyncGraph(protocol='sesame', target='http://...', cache)
+
+inside, each real method calls prep, request, and processResult
+pieces, which are connected together differently in the case of the
+deferred api.
+
+  request(method, rootUrl, path, queryparams, headers, payload)
+  # streaming support for restkit?
+
+# cache api
+class Cache(object):
+    def __init__(self):
+       #
+    def get(self, methodName, *args):
+       # return result or Miss 
+    def set(self, result, methodName, *args):
+       # None
+
+todo:
+- remove 'remote' prefix everywhere?
+- not makeConnection, but SyncGraph and DeferredGraph?
