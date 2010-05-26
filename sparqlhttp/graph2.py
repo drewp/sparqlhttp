@@ -5,6 +5,7 @@ from twisted.internet import defer
 from twisted.web.client import getPage
 from sparqlhttp.sparqljson import parseJsonResults
 from sparqlhttp.remotegraph import interpolateSparql, _checkQuerySyntax, _addOptionalVars, makeDeferredFunc, graphFromTriples
+from sparqlhttp.sesametxn import transactionDoc
 log = logging.getLogger()
 
 class _Graph2(object):
@@ -143,23 +144,10 @@ class _Graph2(object):
         raise NotImplementedError
     
     def remove(self, triples, context=None):
-        # more efficient and atomic would be to use the xml txn
-        # format. But this was faster to write.
-
-        if not isinstance(self, SyncGraph):
-            # just switch to txn, and then it'll be one request again
-            # and this won't be a probelm
-            raise NotImplementedError
-
-        for stmt in triples:
-            self._request(method="DELETE", path="/statements",
-                          queryParams=[
-                              ('subj', stmt[0].n3()),
-                              ('pred', stmt[1].n3()),
-                              ('obj', stmt[2].n3()),
-                              ] +
-                          ([('context', context.n3())] if context else []),
-                          )
+        return self._request(
+            method="DELETE", path="/statements",
+            payload=transactionDoc([('remove', s, p, o, context)
+                                    for s, p, o in triples]))
         
     def save(self, context):                  # for certain remote graphs
         log.warn("not saving %s" % context)
@@ -171,17 +159,16 @@ class SyncGraph(_Graph2):
     """
     def _setRoot(self, rootUrl):
         self._resource = restkit.Resource(rootUrl)
-    def _request(self, method, path, queryParams,
+    def _request(self, method, path, queryParams={},
                 headers=None, payload=None, postProcess=None):
         """
         path is *added to* rootUrl
         """
+        url = self.target + path
+        if queryParams:
+            url = url + '?' + urllib.urlencode(queryParams)
         response = self._resource.do_request(
-            method=method,
-            url=self.target + path + '?' + urllib.urlencode(queryParams),
-            headers=headers,
-            payload=payload,
-            )
+            method=method, url=url, headers=headers, payload=payload)
         ret = response.body
         if not response.status.startswith('2'):
             raise ValueError("status %s: %s" % (response.status, ret))
@@ -211,13 +198,14 @@ class AsyncGraph(_Graph2):
     """
     def _setRoot(self, rootUrl):
         self._root = rootUrl
-    def _request(self, method, path, queryParams,
+    def _request(self, method, path, queryParams={},
                 headers=None, payload=None, postProcess=None):
 
-        d = getPage(self._root + path + '?' + urllib.urlencode(queryParams),
-                    method=method,
-                    postdata=payload,
-                    headers=headers)
+        url = self._root + path
+        if queryParams:
+            url = url + '?' + urllib.urlencode(queryParams)
+        
+        d = getPage(url, method=method, postdata=payload, headers=headers)
 
         def notError(err):
             # workaround for twisted treating 204 as an error
