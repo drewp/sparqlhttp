@@ -21,7 +21,7 @@ web interface to examine the dbInternal context
 an error in the poll makes it stop running for the rest of the process
 """
 from __future__ import division
-import sys, os, time, logging, traceback
+import sys, os, time, logging, traceback, re, urllib
 from rdflib import Namespace, Literal
 from rdflib.syntax.parsers.ntriples import ParseError
 from twisted.internet import task
@@ -155,11 +155,36 @@ class SyncImport(object):
         except KeyboardInterrupt: raise
         except Exception, e:
             log.error("while trying to reload:\n%s", traceback.format_exc())
+
+    def reloadContextSesame(self, filename):
+        """a version that just uploads the file to sesame for parsing
+        and graph replacement. Currently using internal APIs;
+        loadFromFile should be made public"""
+        ctx = contextFromFilename(filename, self.contextPrefix,
+                                  self.inputDirectory)
+        log.debug("reloading %s", ctx)
+        assert filename.endswith(('.n3', '.nt'))
+        n3 = open(filename).read()
+        # rdflib makes prefixes like _1; sesame rejects them. This
+        # might match unexpected stuff!
+        n3 = re.sub(r'_(\d+):', lambda m: 'prefix_%s:' % m.group(1), n3)
+        try:
+            self.graph._request("PUT", path="/statements",
+                                queryParams={'context' : ctx.n3()},
+                                payload=n3,
+                                headers={'Content-Type' : 'text/rdf+n3'})
+            self.setLastImportTime(ctx, time.time(), filename)
+        except KeyboardInterrupt: raise
+        except Exception, e:
+            log.error("while trying to reload:\n%s", traceback.format_exc())
+
+        
+    reloadContext = reloadContextSesame
         
     def lastImportTimeSecs(self, context):
         """get the import time for a context, in unix seconds; or None
         if it was never imported"""
-        if 0:
+        if 1:
             # natural version
             importTime = self.graph.value(context, IMP['lastImportTime'])
         else:
@@ -187,15 +212,15 @@ class SyncImport(object):
         """remember the import time for a context"""
 
         self.removeImportRecord(context)
-        self.graph.add((context, IMP['lastImportTime'],
-                        Literal(iso8601.tostring(secs, time.altzone),
-                                datatype=XS["dateTime"])),
-                       (context, IMP['filename'], Literal(filename)),
+        self.graph.add([(context, IMP['lastImportTime'],
+                         Literal(iso8601.tostring(secs, time.altzone),
+                                 datatype=XS["dateTime"])),
+                        (context, IMP['filename'], Literal(filename))],
                        context=IMP['dbInternal#context'])
 
     def removeImportRecord(self, context):
         log.debug("dropping metadata for context %s" % context)
-        self.graph.remove((context, IMP['lastImportTime'], None),
-                          (context, IMP['filename'], None),
+        self.graph.remove([(context, IMP['lastImportTime'], None),
+                           (context, IMP['filename'], None)],
                           context=IMP['dbInternal#context'])
         
