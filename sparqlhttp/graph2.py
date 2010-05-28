@@ -144,10 +144,11 @@ class _Graph2(object):
         raise NotImplementedError
     
     def remove(self, triples, context=None):
-        return self._request(
-            method="DELETE", path="/statements",
-            payload=transactionDoc([('remove', s, p, o, context)
-                                    for s, p, o in triples]))
+        doc = transactionDoc([('remove', s, p, o, context)
+                              for s, p, o in triples])
+        return self._request(method="POST", path="/statements", payload=doc,
+                             headers={'Content-Type' :
+                                      'application/x-rdftransaction'})
         
     def save(self, context):                  # for certain remote graphs
         log.warn("not saving %s" % context)
