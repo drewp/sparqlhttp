@@ -138,8 +138,10 @@ class _Graph2(object):
     
     def subgraphLength(self, context):
         raise NotImplementedError
+    
     def subgraphClear(self, context):
-        raise NotImplementedError
+        return self.remove([(None, None, None)], context=context)
+
     def dumpAllStatements(self):
         raise NotImplementedError
     

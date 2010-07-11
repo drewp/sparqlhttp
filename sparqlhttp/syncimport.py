@@ -95,7 +95,7 @@ class SyncImport(object):
             # cool
             return
         log.info("input file %s disappeared, clearing %s" % (filename, ctx))
-        self.graph.remove((None, None, None), context=ctx)
+        self.graph.subgraphClear(ctx)
         self.removeImportRecord(ctx)
         
     def _logFileError(self, filename, logFunc, msg):
