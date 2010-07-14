@@ -3,12 +3,12 @@
 from setuptools import setup
 
 setup(name="sparqlhttp",
-      version="1.5",
+      version="1.10",
       description="HTTP SPARQL server and client for twisted and rdflib",
       author="Drew Perttula",
       author_email="drewp@bigasterisk.com",
       url="http://projects.bigasterisk.com/sparqlhttp/",
-      download_url="http://projects.bigasterisk.com/sparqlhttp/sparqlhttp-1.5.tar.gz",
+      download_url="http://projects.bigasterisk.com/sparqlhttp/sparqlhttp-1.10.tar.gz",
 
       setup_requires=['setuptools_trial >= 0.5'],
 
