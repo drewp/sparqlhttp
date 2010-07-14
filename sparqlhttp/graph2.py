@@ -142,6 +142,16 @@ class _Graph2(object):
     def subgraphClear(self, context):
         return self.remove([(None, None, None)], context=context)
 
+    def subgraphStatements(self, context):
+        """return list of all the triples in this context"""
+        stmts = []
+        # surely it would be faster to request the /statements as nt or json
+        for row in self.queryd(
+            "SELECT ?s ?p ?o WHERE { GRAPH ?g { ?s ?p ?o } }",
+            initBindings={'g' : context}):
+            stmts.append((row['s'], row['p'], row['o']))
+        return stmts
+
     def dumpAllStatements(self):
         raise NotImplementedError
     
