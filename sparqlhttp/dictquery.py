@@ -301,6 +301,8 @@ def fixDatatypedLiterals(query, initBindings):
 ##     return query, initBindings
 
 def sparqlSelection(query):
+    if query.startswith("ASK"):
+        return []
     assert ' WHERE ' in query, "sorry, I require the WHERE token because of some dumb parsing"
     return [w for w in query.split("WHERE", 1)[0].split("SELECT",1)[1].split()
             if w.startswith("?")]

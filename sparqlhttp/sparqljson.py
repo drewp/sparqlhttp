@@ -16,7 +16,10 @@ def parseJsonResults(jsonResults):
         { 'p': { 'type': 'uri', 'value': 'http://fantasyfamegame.com/2006/01/passwordSHA' }	, 'o': { 'type': 'literal', 'value': '23fa12c6b4e9e3805a5e9d5dded3e78665fc1899' }},
       ...
     """
-
+    if jsonResults in ['true', 'false']:
+        # this would have been made explicit in the Content-type
+        # header, but I don't have that handy.
+        return jsonResults == 'true'
     ret = []
     for row in jsonlib.loads(jsonResults)['results']['bindings']:
         outRow = {}

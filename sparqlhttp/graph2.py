@@ -74,7 +74,7 @@ class _Graph2(object):
                        'x-bindings' : xBindings,
                        }
         if self.resultFormat == 'json':
-            sendHeaders['Accept'] = 'application/sparql-results+json'
+            sendHeaders['Accept'] = 'application/sparql-results+json,text/boolean'
         else:
             sendHeaders['Accept'] = 'application/sparql-results+xml'
             
@@ -82,7 +82,9 @@ class _Graph2(object):
             sendHeaders.update(headers)
 
         def post(ret):
-            ret = _addOptionalVars(parseJsonResults(ret), query)
+            ret = parseJsonResults(ret)
+            if not isinstance(ret, bool): # ASK result
+                ret = _addOptionalVars(ret, query)
             if _postProcess is not None:
                 ret = _postProcess(ret)
             return ret
