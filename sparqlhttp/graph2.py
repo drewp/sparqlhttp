@@ -36,6 +36,7 @@ class _Graph2(object):
         graph, which simply wraps all the results in deferreds. This
         may be useful for testing.
         """
+        self._checkVersions()
         self.prologue = ""
         if initNs:
             self.prologue = "".join("PREFIX %s: <%s>\n" % (pre,full)
@@ -43,6 +44,10 @@ class _Graph2(object):
         self.resultFormat = 'json' # need this? can't we negotiate?
         self._setRoot(target)
         self.target = target
+
+    def _checkVersions(self):
+        # override this with anything you need to check at startup
+        pass
 
     def _getQuery(self, query, initBindings, headers=None, _postProcess=None):
         """send this query to the server, return deferred to the raw
@@ -83,9 +88,8 @@ class _Graph2(object):
             return ret
         return self._request(
             "GET", path='',
-            queryParams=[
-                ('query', self.prologue +
-                 interpolateSparql(query, initBindings))],
+            queryParams={'query' : self.prologue +
+                         interpolateSparql(query, initBindings)},
             headers=sendHeaders,
             postProcess=post,
             )
@@ -107,7 +111,7 @@ class _Graph2(object):
         
         return self._request(method="POST", path='/statements',
                              headers={'Content-type' : 'text/plain'},
-                             queryParams=[('context', context.n3())],
+                             queryParams={'context': context.n3()},
                              payload=postData)
 
     def contains(self, stmt):
@@ -170,6 +174,9 @@ class SyncGraph(_Graph2):
     Synchonous remote graph access. You must use SyncGraph or
     AsyncGraph, and this is the right one if you don't use twisted.
     """
+    def _checkVersions(self):
+        assert restkit.version_info >= (2,1,0), "need restkit >= 2.1.0"
+
     def _setRoot(self, rootUrl):
         self._resource = restkit.Resource(rootUrl)
     def _request(self, method, path, queryParams={},
@@ -178,11 +185,19 @@ class SyncGraph(_Graph2):
         path is *added to* rootUrl
         """
         url = self.target + path
-        if queryParams:
-            url = url + '?' + urllib.urlencode(queryParams)
-        response = self._resource.do_request(
-            method=method, url=url, headers=headers, payload=payload)
-        ret = response.body
+
+        if not path:
+            path = None # restkit would put a '/' to join two strings
+            
+        response = self._resource.request(
+            method=method, path=path, headers=headers, payload=payload,
+            **queryParams)
+        if response.status_int == 204:
+            # workaround for restkit, which seems to hang for a long
+            # time if you request the body after a 204
+            ret = None
+        else:
+            ret = response.body_string()
         if not response.status.startswith('2'):
             raise ValueError("status %s: %s" % (response.status, ret))
         if postProcess is not None:
