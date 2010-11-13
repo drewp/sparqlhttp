@@ -2,6 +2,8 @@ update setup.py version (two places)
 
 update download links in doc.html
 
+darcs rec
+
 run 'python setup.py sdist', go to a blank virtualenv somewhere, and
 try to easy_install the prospective .tgz
 
