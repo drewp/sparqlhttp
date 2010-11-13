@@ -64,7 +64,7 @@ class RemoteSparql(Graph2):
                             query=query, queryLn='SPARQL',
                             headers={'Accept' :
                                      'application/sparql-results+xml'}
-                            )
+                            ).body_string()
         return parseSparqlResults(xml.encode('utf-8'))
 
     def safeParse(self, source, publicID=None, format="xml"):
