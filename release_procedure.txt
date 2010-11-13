@@ -16,3 +16,5 @@ python setup.py register
 
 darcs cha, put interesting lines into
    /my/site/projects/sparqlhttp/changelog-1.x
+
+(cd /my/darcs/sparqlhttp; darcs pull -a)
