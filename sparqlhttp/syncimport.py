@@ -125,7 +125,8 @@ class SyncImport(object):
                       "skipping (%s)" % (filename, e))
 
                 return False
-            mtime = os.path.getmtime(filename)
+            # we get the mtime of the target file, not a symlink
+            mtime = os.path.getmtime(os.path.realpath(filename))
             if self.lastImportTimeSecs(ctx) < mtime:
                 log.debug("%s < %s, file %s is updated" %
                           (self.lastImportTimeSecs(ctx), mtime, filename))
