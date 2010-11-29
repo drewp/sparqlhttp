@@ -122,11 +122,7 @@ class _Graph2(object):
             if value is not None:
                 bindings[termName] = value
             
-        def check(n):
-            return n > 0
-
-        return self.countQuery("SELECT * WHERE { ?s ?p ?o. }",
-                          initBindings=bindings, _postProcess=check)
+        return self.queryd("ASK { ?s ?p ?o . }", initBindings=bindings)
 
     def label(self, subj, default=''):
         return self.value(subj, RDFS.label, default=default, any=True)
