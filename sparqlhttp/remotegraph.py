@@ -1,4 +1,4 @@
-import urllib, warnings, inspect, os, md5, re, logging
+import urllib, warnings, inspect, os, hashlib, re, logging
 from twisted.internet import defer
 from twisted.web.client import getPage
 from rdflib import Variable, RDFS, Literal
@@ -120,7 +120,7 @@ class _RemoteGraph(object):
         xBindings = (" ".join(initBindings.keys())).encode('utf8')
 
         sendHeaders = {'x-uninterpolated-query-checksum' :
-                       md5.new(query).hexdigest(),
+                       hashlib.md5(query).hexdigest(),
                        'x-bindings' : xBindings,
                        }
         if self.resultFormat == 'json':

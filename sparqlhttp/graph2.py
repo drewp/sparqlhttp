@@ -1,4 +1,4 @@
-import urllib, md5, logging, restkit
+import urllib, hashlib, logging, restkit
 from rdflib import RDFS
 from rdflib.exceptions import UniquenessError
 from twisted.internet import defer
@@ -70,7 +70,7 @@ class _Graph2(object):
         xBindings = (" ".join(initBindings.keys())).encode('utf8')
 
         sendHeaders = {'x-uninterpolated-query-checksum' :
-                       md5.new(query).hexdigest(),
+                       hashlib.md5(query).hexdigest(),
                        'x-bindings' : xBindings,
                        }
         if self.resultFormat == 'json':
