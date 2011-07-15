@@ -11,7 +11,7 @@ try:
     from xml.etree import ElementTree
 except ImportError:
     from elementtree import ElementTree
-log = logging.getLogger()
+log = logging.getLogger("remotegraph")
 
 # every http request to the server would print "Stopping factory" and
 # then the entire, urlquoted sparql request. That's a mess of

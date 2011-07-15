@@ -6,7 +6,7 @@ from twisted.web.client import getPage
 from sparqlhttp.sparqljson import parseJsonResults
 from sparqlhttp.remotegraph import interpolateSparql, _checkQuerySyntax, _addOptionalVars, makeDeferredFunc, graphFromTriples
 from sparqlhttp.sesametxn import transactionDoc
-log = logging.getLogger()
+log = logging.getLogger("graph2")
 
 class _Graph2(object):
     def __init__(self, protocol, target, cache=None, initNs=None):
@@ -54,9 +54,8 @@ class _Graph2(object):
         server result. This is where the prologue (@PREFIX lines) is added."""
         _checkQuerySyntax(query)
         try:
-            get = ('?query=' +
-                   urllib.quote(self.prologue +
-                                interpolateSparql(query, initBindings), safe=''))
+            interpolated = interpolateSparql(query, initBindings)
+            log.debug("sparql request: %s", interpolated)
         except Exception:
             log.error("original query=%r, initBindings=%r" %
                       (query, initBindings))
@@ -90,8 +89,7 @@ class _Graph2(object):
             return ret
         return self._request(
             "GET", path='',
-            queryParams={'query' : self.prologue +
-                         interpolateSparql(query, initBindings)},
+            queryParams={'query' : self.prologue + interpolated},
             headers=sendHeaders,
             postProcess=post,
             )
@@ -100,6 +98,7 @@ class _Graph2(object):
         return self._getQuery(query, initBindings, _postProcess=_postProcess)
  
     def countQuery(self, query, initBindings={}, _postProcess=None):
+        # this could be ported to sparql1.1
         def post(rows):
             ret = len(rows)
             if _postProcess:
