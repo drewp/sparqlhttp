@@ -323,7 +323,7 @@ def interpolateSparql(query, initBindings):
 def _checkQuerySyntax(query):
     if query == 'SELECT * WHERE { ?s ?p ?o. }':
         return
-    if re.search(r"\?[a-z]+[;\.\]\n]", query):
+    if re.search(r"\?[a-zA-Z]+[;\.\]\n]", query):
         raise ValueError("sorry, sparqlhttp is currently too fragile for your syntax. Please change ' ?foo;' to ' ?foo ;' so sparqlhttp can find the variables more easily. This was your query:\n%s" % query)        
 
 def _addOptionalVars(rows, query):
