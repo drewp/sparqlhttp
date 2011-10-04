@@ -9,7 +9,8 @@ from sparqlhttp.sesametxn import transactionDoc
 log = logging.getLogger("graph2")
 
 class _Graph2(object):
-    def __init__(self, protocol, target, cache=None, initNs=None):
+    def __init__(self, protocol, target, cache=None, initNs=None,
+                 getParams=None):
         """
         :Parameters:
             protocol
@@ -32,6 +33,9 @@ class _Graph2(object):
                 on all queries (so you don't have to pass PREFIX lines
                 each time)
 
+            getParams
+                Dict of extra params to pass on GET requests (e.g. infer=false)
+
         You may even ask for an Async version of an rdflib-berkeleydb
         graph, which simply wraps all the results in deferreds. This
         may be useful for testing.
@@ -44,6 +48,7 @@ class _Graph2(object):
         self.resultFormat = 'json' # need this? can't we negotiate?
         self._setRoot(target)
         self.target = target
+        self.getParams = getParams or {}
 
     def _checkVersions(self):
         # override this with anything you need to check at startup
@@ -87,9 +92,11 @@ class _Graph2(object):
             if _postProcess is not None:
                 ret = _postProcess(ret)
             return ret
+        params = {'query' : self.prologue + interpolated}
+        params.update(self.getParams)
         return self._request(
             "GET", path='',
-            queryParams={'query' : self.prologue + interpolated},
+            queryParams=params,
             headers=sendHeaders,
             postProcess=post,
             )
@@ -227,8 +234,10 @@ class AsyncGraph(_Graph2):
                 headers=None, payload=None, postProcess=None):
 
         url = self._root + path
-        if queryParams:
-            url = url + '?' + urllib.urlencode(queryParams)
+        params = self.getParams
+        params.update(queryParams)
+        if params:
+            url = url + '?' + urllib.urlencode(params)
         
         d = getPage(url, method=method, postdata=payload, headers=headers)
 
