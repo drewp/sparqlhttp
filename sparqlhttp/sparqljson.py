@@ -16,6 +16,10 @@ def parseJsonResults(jsonResults):
         { 'p': { 'type': 'uri', 'value': 'http://fantasyfamegame.com/2006/01/passwordSHA' }	, 'o': { 'type': 'literal', 'value': '23fa12c6b4e9e3805a5e9d5dded3e78665fc1899' }},
       ...
     """
+
+    # for speed, don't let jsonlib poke at the string to figure out the encoding
+    jsonResults = jsonResults.decode('utf8')
+    
     if jsonResults in ['true', 'false']:
         # this would have been made explicit in the Content-type
         # header, but I don't have that handy.
