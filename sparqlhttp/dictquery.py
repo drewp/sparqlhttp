@@ -4,9 +4,17 @@ import sys
 import xml.sax
 
 import rdflib
-from rdflib import Variable as rdflib_Variable, RDFS, URIRef, BNode, Literal, StringInputSource
-from rdflib.syntax.parsers.ntriples import ParseError
-from rdflib.Graph import ConjunctiveGraph, Graph
+from rdflib import Variable as rdflib_Variable, RDFS, URIRef, BNode, Literal
+
+try:
+    from rdflib import StringInputSource
+    from rdflib.syntax.parsers.ntriples import ParseError
+    from rdflib.Graph import ConjunctiveGraph, Graph
+except ImportError:
+    #rdflib3
+    from rdflib.parser import StringInputSource
+    from rdflib.plugins.parsers.ntriples import ParseError
+    from rdflib import Graph, ConjunctiveGraph
 
 if rdflib.__version__ == '2.4.0': # number might not be exactly right
     Variable = lambda v: rdflib_Variable('?' + v)

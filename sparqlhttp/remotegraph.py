@@ -3,7 +3,10 @@ from twisted.internet import defer
 from twisted.web.client import getPage
 from rdflib import Variable, RDFS, Literal
 from rdflib.exceptions import UniquenessError
-from rdflib.Graph import Graph
+try:
+    from rdflib.Graph import Graph
+except ImportError:
+    from rdflib import Graph
 from sparqlhttp.sparqlxml import parseSparqlResults, parseCountTree
 from sparqlhttp.sparqljson import parseJsonResults, jsonRowCount
 from sparqlhttp.dictquery import sparqlSelection
