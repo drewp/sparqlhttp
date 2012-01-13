@@ -131,6 +131,8 @@ class Graph2(object):
         self._graphModified() # why is this at the top, before the
                               # modification, instead of after the
                               # commit? need to check the usage
+        if isinstance(triples[0], list):
+            triples = triples[0] # my newer APIs take a list here
         try:
             context = context['context']
         except KeyError:
@@ -245,6 +247,8 @@ class Graph2(object):
 
     def remove(self, *triples, **context):
         """graph.get_context(context).remove(stmt)"""
+        if isinstance(triples[0], list):
+            triples = triples[0] # see above
         self._graphModified()
         context = context.get('context')
         if context is None:
