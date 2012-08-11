@@ -23,7 +23,7 @@ an error in the poll makes it stop running for the rest of the process
 from __future__ import division
 import sys, os, time, logging, traceback, re, urllib
 from rdflib import Namespace, Literal
-from rdflib.syntax.parsers.ntriples import ParseError
+from rdflib.plugins.parsers.ntriples import ParseError
 from twisted.internet import task
 from sparqlhttp.dictquery import contextFromFilename
 

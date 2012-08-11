@@ -3,7 +3,7 @@ a Graph2 that talks http to sesame (or allegro). This class is
 synchronous and uses restkit for its http client, not twisted.
 """
 
-from rdflib.Graph import Graph
+from rdflib import Graph
 
 import sys
 import restkit
