@@ -21,17 +21,18 @@ web interface to examine the dbInternal context
 an error in the poll makes it stop running for the rest of the process
 """
 from __future__ import division
-import sys, os, time, logging, traceback, re, urllib
+import os, logging, traceback, re, datetime
 from rdflib import Namespace, Literal
-from rdflib.plugins.parsers.ntriples import ParseError
+try:
+    from rdflib.plugins.parsers.ntriples import ParseError
+except ImportError:
+    # older rdflib
+    from rdflib.syntax.parsers.ntriples import ParseError
 from twisted.internet import task
 from sparqlhttp.dictquery import contextFromFilename
+from dateutil.parser import parse
+from dateutil.tz import tzlocal
 
-# from /usr/share/doc/python-xml/changelog.Debian.gz, to make
-# xml.utils.iso8601 available on ubuntu 8.04+
-sys.path.append('/usr/lib/python%s/site-packages/oldxml' % sys.version[:3])
-
-from _xmlplus.utils import iso8601
 import xml.sax._exceptions
 IMP = Namespace("http://projects.bigasterisk.com/2006/01/syncImport/")
 XS = Namespace("http://www.w3.org/2001/XMLSchema#")
@@ -126,10 +127,13 @@ class SyncImport(object):
 
                 return False
             # we get the mtime of the target file, not a symlink
-            mtime = os.path.getmtime(os.path.realpath(filename))
-            if self.lastImportTimeSecs(ctx) < mtime:
+            mtime = datetime.datetime.fromtimestamp(
+                os.path.getmtime(os.path.realpath(filename)), tzlocal())
+            last = self.lastImportTime(ctx)
+            if not last or last < mtime:
                 log.debug("%s < %s, file %s is updated" %
-                          (self.lastImportTimeSecs(ctx), mtime, filename))
+                          (last.isoformat() if last else 'None',
+                           mtime.isoformat(), filename))
                 return True
         except KeyboardInterrupt: raise
         except Exception, e:
@@ -149,7 +153,8 @@ class SyncImport(object):
         try:
             ext = os.path.splitext(filename)[1].replace('.', '')
             self.graph.safeParse(filename, publicID=ctx, format=ext)
-            self.setLastImportTime(ctx, time.time(), filename)
+            self.setLastImportTime(ctx, datetime.datetime.now(tzlocal()),
+                                   filename)
         except (xml.sax._exceptions.SAXParseException,
                 ParseError), e:
             log.warn("parse error reading file. (%s)", e)
@@ -169,21 +174,22 @@ class SyncImport(object):
         # rdflib makes prefixes like _1; sesame rejects them. This
         # might match unexpected stuff!
         n3 = re.sub(r'_(\d+):', lambda m: 'prefix_%s:' % m.group(1), n3)
+        now = datetime.datetime.now(tzlocal())
         try:
             self.graph._request("PUT", path="/statements",
                                 queryParams={'context' : ctx.n3()},
                                 payload=n3,
                                 headers={'Content-Type' : 'text/rdf+n3'})
-            self.setLastImportTime(ctx, time.time(), filename)
+            self.setLastImportTime(ctx, now, filename)
         except KeyboardInterrupt: raise
         except Exception, e:
             log.error("while trying to reload:\n%s", traceback.format_exc())
 
         
     reloadContext = reloadContextSesame
-        
-    def lastImportTimeSecs(self, context):
-        """get the import time for a context, in unix seconds; or None
+
+    def lastImportTime(self, context):
+        """get the import time for a context as datetime; or None
         if it was never imported"""
         if 1:
             # natural version
@@ -202,20 +208,19 @@ class SyncImport(object):
         if importTime is None:
             log.debug("no imp:lastImportTime for %s" % context)
             return None
-        return iso8601.parse(str(importTime))
+        return parse(str(importTime))
         
     def allImportedFilenames(self):
         rows = self.graph.queryd(
             "SELECT ?f WHERE { ?ctx <%s> ?f }" % IMP['filename'])
         return set([row['f'] for row in rows])
 
-    def setLastImportTime(self, context, secs, filename):
+    def setLastImportTime(self, context, t, filename):
         """remember the import time for a context"""
 
         self.removeImportRecord(context)
         self.graph.add([(context, IMP['lastImportTime'],
-                         Literal(iso8601.tostring(secs, time.altzone),
-                                 datatype=XS["dateTime"])),
+                         Literal(t.isoformat(), datatype=XS["dateTime"])),
                         (context, IMP['filename'], Literal(filename))],
                        context=IMP['dbInternal#context'])
 
